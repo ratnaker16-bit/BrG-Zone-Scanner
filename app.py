@@ -1,767 +1,253 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
-import numpy as np
+import yfinance as yf
 
 # ============================================================
-# BrG Zone Scanner
+# Page Configuration
 # ============================================================
-
 st.set_page_config(
-    page_title="BrG Zone Scanner",
-    page_icon="🔎",
+    page_title="Institutional D&S Zone Scanner",
+    page_icon="📈",
     layout="wide"
 )
 
-st.title("🔎 BrG Zone Scanner")
-st.caption("Intraday Zone Scanner | NSE Stocks")
+st.title("📈 Institutional D&S Zone Scanner")
+st.caption("Advanced Supply & Demand Zone Scanner | Smart Money Concepts")
 
 # ============================================================
-# STOCK LIST
+# NSE STOCKS LIST
 # ============================================================
-
-NSE_STOCKS = [
-    "RELIANCE.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS",
-    "SBIN.NS",
-    "AXISBANK.NS",
-    "KOTAKBANK.NS",
-    "INFY.NS",
-    "TCS.NS",
-    "WIPRO.NS",
-    "HCLTECH.NS",
-    "TECHM.NS",
-    "LTIM.NS",
-    "RELIANCE.NS",
-    "LT.NS",
-    "BHARTIARTL.NS",
-    "ITC.NS",
-    "HINDUNILVR.NS",
-    "MARUTI.NS",
-    "M&M.NS",
-    "TATAMOTORS.NS",
-    "TATASTEEL.NS",
-    "JSWSTEEL.NS",
-    "HINDALCO.NS",
-    "ADANIENT.NS",
-    "ADANIPORTS.NS",
-    "SUNPHARMA.NS",
-    "CIPLA.NS",
-    "DRREDDY.NS",
-    "ONGC.NS",
-    "NTPC.NS",
-    "POWERGRID.NS",
-    "COALINDIA.NS",
-    "BEL.NS",
-    "HAL.NS",
-    "TITAN.NS",
-    "ASIANPAINT.NS",
-    "ULTRACEMCO.NS",
-    "GRASIM.NS",
-    "BAJFINANCE.NS",
-    "BAJAJFINSV.NS",
-    "INDUSINDBK.NS",
-    "BANKBARODA.NS",
-    "PNB.NS",
-    "CANBK.NS",
-    "IDFCFIRSTB.NS",
-    "FEDERALBNK.NS",
-    "DLF.NS",
-    "TRENT.NS",
-    "ZOMATO.NS"
-]
-
-# Remove duplicates
-NSE_STOCKS = list(dict.fromkeys(NSE_STOCKS))
+NSE_STOCKS = {
+    "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "INFY": "INFY.NS",
+    "HDFCBANK": "HDFCBANK.NS", "ICICIBANK": "ICICIBANK.NS", "SBIN": "SBIN.NS",
+    "AXISBANK": "AXISBANK.NS", "KOTAKBANK": "KOTAKBANK.NS", "LT": "LT.NS",
+    "BHARTIARTL": "BHARTIARTL.NS", "ITC": "ITC.NS", "HINDUNILVR": "HINDUNILVR.NS",
+    "MARUTI": "MARUTI.NS", "M&M": "M&M.NS", "TATAMOTORS": "TATAMOTORS.NS",
+    "TATASTEEL": "TATASTEEL.NS", "HINDALCO": "HINDALCO.NS", "ADANIENT": "ADANIENT.NS",
+    "ADANIPORTS": "ADANIPORTS.NS", "SUNPHARMA": "SUNPHARMA.NS", "BAJFINANCE": "BAJFINANCE.NS",
+    "BAJAJFINSV": "BAJAJFINSV.NS", "WIPRO": "WIPRO.NS", "HCLTECH": "HCLTECH.NS",
+    "TECHM": "TECHM.NS", "COALINDIA": "COALINDIA.NS", "ONGC": "ONGC.NS",
+    "NTPC": "NTPC.NS", "POWERGRID": "POWERGRID.NS", "JSWSTEEL": "JSWSTEEL.NS",
+    "TATACONSUM": "TATACONSUM.NS", "TITAN": "TITAN.NS", "ULTRACEMCO": "ULTRACEMCO.NS",
+    "ASIANPAINT": "ASIANPAINT.NS", "EICHERMOT": "EICHERMOT.NS", "HEROMOTOCO": "HEROMOTOCO.NS",
+    "BAJAJ-AUTO": "BAJAJ-AUTO.NS", "DRREDDY": "DRREDDY.NS", "CIPLA": "CIPLA.NS",
+    "DIVISLAB": "DIVISLAB.NS", "APOLLOHOSP": "APOLLOHOSP.NS", "BEL": "BEL.NS",
+    "HAL": "HAL.NS", "TRENT": "TRENT.NS", "INDUSINDBK": "INDUSINDBK.NS",
+    "BANKBARODA": "BANKBARODA.NS", "PNB": "PNB.NS", "CANBK": "CANBK.NS",
+    "IDFCFIRSTB": "IDFCFIRSTB.NS", "IOC": "IOC.NS", "BPCL": "BPCL.NS",
+    "GAIL": "GAIL.NS", "VEDL": "VEDL.NS", "JINDALSTEL": "JINDALSTEL.NS",
+    "SAIL": "SAIL.NS", "INDHOTEL": "INDHOTEL.NS", "DLF": "DLF.NS",
+    "IRCTC": "IRCTC.NS", "ZOMATO": "ZOMATO.NS", "UPL": "UPL.NS", "RECLTD": "RECLTD.NS", "HDFCAMC": "HDFCAMC.NS"
+}
 
 # ============================================================
-# SIDEBAR
+# DATA FETCHING & TIMEFRAME HANDLING
 # ============================================================
-
-st.sidebar.header("⚙️ Scanner Settings")
-
-timeframe = st.sidebar.selectbox(
-    "Timeframe चुनें",
-    ["1 Min", "5 Min", "15 Min", "1 Hour"]
-)
-
-# Correct yfinance settings
-if timeframe == "1 Min":
-    interval = "1m"
-    period = "7d"
-
-elif timeframe == "5 Min":
-    interval = "5m"
-    period = "60d"
-
-elif timeframe == "15 Min":
-    interval = "15m"
-    period = "60d"
-
-else:
-    interval = "60m"
-    period = "730d"
-
-# ============================================================
-# STOCK SELECTION
-# ============================================================
-
-selected_stocks = st.sidebar.multiselect(
-    "Stocks चुनें",
-    NSE_STOCKS,
-    default=NSE_STOCKS[:20]
-)
-
-scan_all = st.sidebar.checkbox(
-    "सभी उपलब्ध Stocks Scan करें",
-    value=False
-)
-
-if scan_all:
-    stocks_to_scan = NSE_STOCKS
-else:
-    stocks_to_scan = selected_stocks
-
-# ============================================================
-# PARAMETERS
-# ============================================================
-
-st.sidebar.subheader("📊 Parameters")
-
-rsi_length = st.sidebar.number_input(
-    "RSI Length",
-    min_value=2,
-    max_value=50,
-    value=9
-)
-
-ema_length = st.sidebar.number_input(
-    "EMA Length",
-    min_value=2,
-    max_value=100,
-    value=20
-)
-
-volume_length = st.sidebar.number_input(
-    "Volume Average Length",
-    min_value=2,
-    max_value=100,
-    value=20
-)
-
-zone_lookback = st.sidebar.number_input(
-    "Zone Lookback",
-    min_value=5,
-    max_value=100,
-    value=20
-)
-
-# ============================================================
-# INDICATOR FUNCTIONS
-# ============================================================
-
-def calculate_rsi(series, length=9):
-    delta = series.diff()
-
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    avg_gain = gain.ewm(
-        alpha=1 / length,
-        min_periods=length,
-        adjust=False
-    ).mean()
-
-    avg_loss = loss.ewm(
-        alpha=1 / length,
-        min_periods=length,
-        adjust=False
-    ).mean()
-
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-
-    rsi = 100 - (100 / (1 + rs))
-
-    return rsi
-
-
-def calculate_vwap(df):
-    typical_price = (
-        df["High"] +
-        df["Low"] +
-        df["Close"]
-    ) / 3
-
-    volume = df["Volume"].fillna(0)
-
-    cumulative_volume = volume.cumsum()
-
-    cumulative_pv = (
-        typical_price * volume
-    ).cumsum()
-
-    vwap = cumulative_pv / cumulative_volume.replace(
-        0,
-        np.nan
-    )
-
-    return vwap
-
-
-# ============================================================
-# DOWNLOAD DATA
-# ============================================================
-
-@st.cache_data(ttl=60)
-def download_stock_data(symbol, interval, period):
+def fetch_data(symbol, timeframe):
+    if timeframe == "1 Minute":
+        interval, period = "1m", "7d"
+    elif timeframe == "5 Minutes":
+        interval, period = "5m", "59d"
+    elif timeframe == "15 Minutes":
+        interval, period = "15m", "59d"
+    elif timeframe == "1 Hour":
+        interval, period = "1h", "730d"
+    elif timeframe == "4 Hours":
+        # Yahoo Finance सीधे 4h नहीं देता, इसलिए 1h डेटा को रीसेंपल (Resample) करेंगे
+        interval, period = "1h", "730d"
+    elif timeframe == "Daily":
+        interval, period = "1d", "max"
+    else:
+        interval, period = "1d", "max"
 
     try:
-
-        df = yf.download(
-            symbol,
-            period=period,
-            interval=interval,
-            progress=False,
-            auto_adjust=False,
-            threads=False
-        )
-
+        df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
         if df is None or df.empty:
             return pd.DataFrame()
 
-        # Handle MultiIndex columns from yfinance
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        required_columns = [
-            "Open",
-            "High",
-            "Low",
-            "Close",
-            "Volume"
-        ]
+        # यदि टाइमफ्रेम 4 Hours है, तो 1-hour डेटा को 4 घंटे में बदलें
+        if timeframe == "4 Hours":
+            df = df.resample('4h').agg({
+                'Open': 'first',
+                'High': 'max',
+                'Low': 'min',
+                'Close': 'last',
+                'Volume': 'sum'
+            }).dropna()
 
-        for col in required_columns:
-            if col not in df.columns:
-                return pd.DataFrame()
+        required_cols = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(col in df.columns for col in required_cols):
+            return pd.DataFrame()
 
-        df = df[required_columns].copy()
-
-        df.dropna(
-            subset=["Open", "High", "Low", "Close"],
-            inplace=True
-        )
-
-        return df
-
+        return df[required_cols].dropna()
     except Exception:
         return pd.DataFrame()
 
+# ============================================================
+# ZONE IDENTIFICATION & STATUS (Fresh/Tested/HQ)
+# ============================================================
+def identify_zones(df, symbol, timeframe):
+    zones = []
+    if len(df) < 10:
+        return zones
+
+    for i in range(2, len(df) - 2):
+        prev_open = float(df["Open"].iloc[i - 1])
+        prev_close = float(df["Close"].iloc[i - 1])
+
+        base_open = float(df["Open"].iloc[i])
+        base_close = float(df["Close"].iloc[i])
+        base_high = float(df["High"].iloc[i])
+        base_low = float(df["Low"].iloc[i])
+
+        base_body = abs(base_close - base_open)
+        base_range = base_high - base_low
+
+        if base_range <= 0 or (base_body / base_range) > 0.40:
+            continue
+
+        next_open = float(df["Open"].iloc[i + 1])
+        next_close = float(df["Close"].iloc[i + 1])
+        next_high = float(df["High"].iloc[i + 1])
+        next_low = float(df["Low"].iloc[i + 1])
+
+        next_body = abs(next_close - next_open)
+        next_range = next_high - next_low
+
+        if next_range <= 0 or (next_body / next_range) < 0.60:
+            continue
+
+        zone_type = None
+        # Demand (Drop -> Base -> Rally)
+        if prev_close < prev_open and next_close > next_open:
+            zone_type = "DEMAND"
+        # Supply (Rally -> Base -> Drop)
+        elif prev_close > prev_open and next_close < next_open:
+            zone_type = "SUPPLY"
+
+        if zone_type:
+            z_high = round(base_high, 2)
+            z_low = round(base_low, 2)
+            
+            # चेक करें कि ज़ोन बनने के बाद कीमत दोबारा उस ज़ोन में आई या नहीं (Fresh vs Tested)
+            is_tested = False
+            for j in range(i + 2, len(df)):
+                curr_l = df["Low"].iloc[j]
+                curr_h = df["High"].iloc[j]
+                if zone_type == "DEMAND" and curr_l <= z_high:
+                    is_tested = True
+                    break
+                elif zone_type == "SUPPLY" and curr_h >= z_low:
+                    is_tested = True
+                    break
+
+            status = "Tested" if is_tested else "Fresh"
+            
+            # High Quality (HQ) निर्धारण: अगर वॉल्यूम मजबूत है या बड़ा डिपार्चर है
+            is_hq = next_body > (base_range * 1.5)
+            hq_label = "★ HQ" if is_hq else "Standard"
+
+            # ट्रेडिंगव्यू का डायरेक्ट चार्ट लिंक फॉर्मेट
+            clean_symbol = symbol.replace(".NS", "")
+            tv_link = f"https://www.tradingview.com/chart/?symbol=NSE:{clean_symbol}"
+
+            zones.append({
+                "एसेट": clean_symbol,
+                "चार्ट खोलें": tv_link,
+                "टाइमफ्रेम": timeframe,
+                "दिशा": f"🟢 DEMAND" if zone_type == "DEMAND" else f"🔴 SUPPLY",
+                "पैटर्न": "Drop-Base-Rally" if zone_type == "DEMAND" else "Rally-Base-Drop",
+                "ज़ोन हाई": z_high,
+                "ज़ोन लो": z_low,
+                "स्थिति": status,
+                "क्वालिटी": hq_label,
+                "समय": str(df.index[i])
+            })
+
+    return zones
 
 # ============================================================
-# ZONE DETECTION
+# SIDEBAR CONTROLS
 # ============================================================
+st.sidebar.header("⚙️ Scanner Settings")
 
-def detect_zone(df):
+selected_stocks = st.sidebar.multiselect(
+    "शेयर चुनें (NSE Stocks)",
+    list(NSE_STOCKS.keys()),
+    default=["RELIANCE", "HDFCBANK", "ICICIBANK", "SBIN", "TATASTEEL", "UPL", "RECLTD", "HDFCAMC"]
+)
 
-    if df.empty or len(df) < max(
-        zone_lookback,
-        ema_length,
-        rsi_length
-    ) + 5:
-        return None
+timeframe = st.sidebar.selectbox(
+    "टाइमफ्रेम चुनें",
+    ["1 Minute", "5 Minutes", "15 Minutes", "1 Hour", "4 Hours", "Daily"],
+    index=3
+)
 
-    df = df.copy()
-
-    # --------------------------------------------------------
-    # EMA
-    # --------------------------------------------------------
-
-    df["EMA"] = df["Close"].ewm(
-        span=ema_length,
-        adjust=False
-    ).mean()
-
-    # --------------------------------------------------------
-    # RSI
-    # --------------------------------------------------------
-
-    df["RSI"] = calculate_rsi(
-        df["Close"],
-        rsi_length
-    )
-
-    # --------------------------------------------------------
-    # VWAP
-    # --------------------------------------------------------
-
-    df["VWAP"] = calculate_vwap(df)
-
-    # --------------------------------------------------------
-    # Volume Average
-    # --------------------------------------------------------
-
-    df["Volume_Avg"] = (
-        df["Volume"]
-        .rolling(volume_length)
-        .mean()
-    )
-
-    df["Volume_Ratio"] = (
-        df["Volume"] /
-        df["Volume_Avg"].replace(0, np.nan)
-    )
-
-    # --------------------------------------------------------
-    # Recent data
-    # --------------------------------------------------------
-
-    recent = df.iloc[-1]
-
-    previous = df.iloc[-2]
-
-    close = float(recent["Close"])
-    high = float(recent["High"])
-    low = float(recent["Low"])
-
-    ema = float(recent["EMA"])
-    vwap = float(recent["VWAP"])
-    rsi = float(recent["RSI"])
-
-    volume_ratio = float(
-        recent["Volume_Ratio"]
-    ) if pd.notna(
-        recent["Volume_Ratio"]
-    ) else 0
-
-    # --------------------------------------------------------
-    # Previous candle
-    # --------------------------------------------------------
-
-    prev_close = float(previous["Close"])
-    prev_high = float(previous["High"])
-    prev_low = float(previous["Low"])
-
-    # --------------------------------------------------------
-    # Lookback zone
-    # --------------------------------------------------------
-
-    lookback_df = df.iloc[
-        -zone_lookback:
-    ]
-
-    zone_high = float(
-        lookback_df["High"].max()
-    )
-
-    zone_low = float(
-        lookback_df["Low"].min()
-    )
-
-    # --------------------------------------------------------
-    # Gap calculation
-    # --------------------------------------------------------
-
-    first_open = float(df.iloc[0]["Open"])
-
-    latest_close = close
-
-    percent_change = (
-        (latest_close - first_open)
-        / first_open
-    ) * 100 if first_open != 0 else 0
-
-    # --------------------------------------------------------
-    # Bullish / Bearish conditions
-    # --------------------------------------------------------
-
-    bullish = (
-        close > ema and
-        close > vwap and
-        rsi >= 50
-    )
-
-    bearish = (
-        close < ema and
-        close < vwap and
-        rsi < 50
-    )
-
-    # --------------------------------------------------------
-    # Breakout
-    # --------------------------------------------------------
-
-    bullish_breakout = (
-        close > zone_high
-    )
-
-    bearish_breakdown = (
-        close < zone_low
-    )
-
-    # --------------------------------------------------------
-    # Zone
-    # --------------------------------------------------------
-
-    if bullish_breakout:
-        zone_type = "🟢 Bullish Breakout"
-        zone_price = zone_high
-        signal = "BUY"
-
-    elif bearish_breakdown:
-        zone_type = "🔴 Bearish Breakdown"
-        zone_price = zone_low
-        signal = "SELL"
-
-    elif bullish:
-        zone_type = "🟢 Bullish Zone"
-        zone_price = zone_low
-        signal = "WATCH BUY"
-
-    elif bearish:
-        zone_type = "🔴 Bearish Zone"
-        zone_price = zone_high
-        signal = "WATCH SELL"
-
+# ============================================================
+# MAIN SCANNER EXECUTION
+# ============================================================
+if st.button("🚀 स्कैन शुरू करें", use_container_width=True):
+    if not selected_stocks:
+        st.warning("⚠️ कृपया कम से कम एक शेयर चुनें।")
     else:
-        zone_type = "⚪ Neutral"
-        zone_price = close
-        signal = "WAIT"
+        all_zones = []
+        progress_bar = st.progress(0)
+        total_stocks = len(selected_stocks)
 
-    # --------------------------------------------------------
-    # Score
-    # --------------------------------------------------------
+        with st.spinner(f"स्कैनिंग जारी है ({timeframe})..."):
+            for idx, stock_name in enumerate(selected_stocks):
+                symbol_code = NSE_STOCKS[stock_name]
+                df = fetch_data(symbol_code, timeframe)
+                if not df.empty:
+                    stock_zones = identify_zones(df, symbol_code, timeframe)
+                    all_zones.extend(stock_zones)
+                progress_bar.progress(int(((idx + 1) / total_stocks) * 100))
 
-    score = 0
+        progress_bar.empty()
 
-    if close > ema:
-        score += 20
+        if all_zones:
+            res_df = pd.DataFrame(all_zones)
+            
+            # डैशबोर्ड मैट्रिक्स कैलकुलेशन
+            total_zones_count = len(res_df)
+            fresh_count = len(res_df[res_df["स्थिति"] == "Fresh"])
+            tested_count = len(res_df[res_df["स्थिति"] == "Tested"])
+            hq_count = len(res_df[res_df["क्वालिटी"] == "★ HQ"])
 
-    if close > vwap:
-        score += 20
-
-    if rsi >= 50:
-        score += 20
-
-    if volume_ratio >= 1:
-        score += 20
-
-    if bullish_breakout:
-        score += 20
-
-    if close < ema:
-        score -= 20
-
-    if close < vwap:
-        score -= 20
-
-    if rsi < 50:
-        score -= 20
-
-    if bearish_breakdown:
-        score -= 20
-
-    score = max(
-        -100,
-        min(100, score)
-    )
-
-    # --------------------------------------------------------
-    # Zone width
-    # --------------------------------------------------------
-
-    zone_width = zone_high - zone_low
-
-    # --------------------------------------------------------
-    # Return
-    # --------------------------------------------------------
-
-    return {
-        "Stock": symbol.replace(".NS", ""),
-        "Timeframe": timeframe,
-        "Signal": signal,
-        "Zone": zone_type,
-        "Close": round(close, 2),
-        "Zone Low": round(zone_low, 2),
-        "Zone High": round(zone_high, 2),
-        "EMA": round(ema, 2),
-        "VWAP": round(vwap, 2),
-        "RSI(9)": round(rsi, 2),
-        "Volume Ratio": round(volume_ratio, 2),
-        "% Change": round(percent_change, 2),
-        "Score": score
-    }
-
-
-# ============================================================
-# SCAN BUTTON
-# ============================================================
-
-st.subheader(
-    f"📡 Current Timeframe: {timeframe}"
-)
-
-st.info(
-    f"Data Source: Yahoo Finance | "
-    f"Interval: {interval} | "
-    f"Period: {period}"
-)
-
-scan_button = st.button(
-    "🔎 Scan Zones",
-    type="primary",
-    use_container_width=True
-)
-
-# ============================================================
-# SCANNER
-# ============================================================
-
-if scan_button:
-
-    if not stocks_to_scan:
-
-        st.warning(
-            "कृपया कम से कम एक Stock चुनें।"
-        )
-
-    else:
-
-        results = []
-
-        progress = st.progress(0)
-
-        status = st.empty()
-
-        total = len(stocks_to_scan)
-
-        for i, symbol in enumerate(
-            stocks_to_scan
-        ):
-
-            status.text(
-                f"Scanning {symbol.replace('.NS', '')} "
-                f"({i + 1}/{total})..."
+            # स्क्रीनशॉट जैसा टॉप डैशबोर्ड बॉक्स
+            st.markdown(
+                f"""
+                <div style="background-color: #0f172a; padding: 15px; border-radius: 10px; color: white; margin-bottom: 20px;">
+                    <p style="margin: 0; font-size: 16px;">📦 कुल Zones: <b>{total_zones_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; 🟢 Fresh: <b>{fresh_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; 🟡 Tested: <b>{tested_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; ⭐ HQ: <b>{hq_count}</b></p>
+                </div>
+                """, 
+                unsafe_allow_html=True
             )
 
-            df = download_stock_data(
-                symbol,
-                interval,
-                period
-            )
+            st.success(f"सफलतापूर्वक स्कैन पूरा हुआ! कुल {total_zones_count} ज़ोन मिले।")
 
-            if not df.empty:
-
-                result = detect_zone(df)
-
-                if result is not None:
-                    results.append(result)
-
-            progress.progress(
-                int(
-                    ((i + 1) / total) * 100
-                )
-            )
-
-        progress.empty()
-        status.empty()
-
-        # ====================================================
-        # RESULTS
-        # ====================================================
-
-        if not results:
-
-            st.error(
-                "कोई valid market data नहीं मिला। "
-                "कृपया थोड़ी देर बाद फिर Scan करें।"
-            )
-
-        else:
-
-            result_df = pd.DataFrame(
-                results
-            )
-
-            # Sort by absolute score
-            result_df["SortScore"] = (
-                result_df["Score"].abs()
-            )
-
-            result_df.sort_values(
-                "SortScore",
-                ascending=False,
-                inplace=True
-            )
-
-            result_df.drop(
-                columns=["SortScore"],
-                inplace=True
-            )
-
-            # =================================================
-            # TOP STOCKS
-            # =================================================
-
-            st.subheader(
-                "🏆 Top BrG Zones"
-            )
-
-            top_results = result_df[
-                result_df["Signal"].isin(
-                    [
-                        "BUY",
-                        "SELL",
-                        "WATCH BUY",
-                        "WATCH SELL"
-                    ]
-                )
-            ].head(5)
-
-            if not top_results.empty:
-
-                for _, row in top_results.iterrows():
-
-                    signal = row["Signal"]
-
-                    if signal == "BUY":
-                        st.success(
-                            f"🟢 {row['Stock']} | "
-                            f"{row['Zone']} | "
-                            f"Score: {row['Score']}"
-                        )
-
-                    elif signal == "SELL":
-                        st.error(
-                            f"🔴 {row['Stock']} | "
-                            f"{row['Zone']} | "
-                            f"Score: {row['Score']}"
-                        )
-
-                    else:
-                        st.info(
-                            f"👀 {row['Stock']} | "
-                            f"{row['Zone']} | "
-                            f"Score: {row['Score']}"
-                        )
-
-            # =================================================
-            # FULL TABLE
-            # =================================================
-
-            st.subheader(
-                "📋 Scanner Results"
-            )
-
+            # डेटा टेबल दिखाना (TradingView लिंक्स को क्लिकेबल बनाने के लिए st.data_editor या st.dataframe का उपयोग)
             st.dataframe(
-                result_df,
+                res_df,
                 use_container_width=True,
-                hide_index=True
-            )
-
-            # =================================================
-            # FILTERED ZONES
-            # =================================================
-
-            st.subheader(
-                "🎯 Active Zones"
-            )
-
-            active_zones = result_df[
-                result_df["Signal"].isin(
-                    [
-                        "BUY",
-                        "SELL"
-                    ]
-                )
-            ].copy()
-
-            if active_zones.empty:
-
-                st.warning(
-                    "इस scan में कोई strong active BUY/SELL zone नहीं मिला।"
-                )
-
-            else:
-
-                st.dataframe(
-                    active_zones,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-            # =================================================
-            # SUMMARY
-            # =================================================
-
-            st.subheader(
-                "📊 Scan Summary"
-            )
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            buy_count = len(
-                result_df[
-                    result_df["Signal"] == "BUY"
-                ]
-            )
-
-            sell_count = len(
-                result_df[
-                    result_df["Signal"] == "SELL"
-                ]
-            )
-
-            watch_count = len(
-                result_df[
-                    result_df["Signal"].isin(
-                        [
-                            "WATCH BUY",
-                            "WATCH SELL"
-                        ]
+                hide_index=True,
+                column_config={
+                    "चार्ट खोलें": st.column_config.LinkColumn(
+                        "📊 चार्ट खोलें",
+                        help="क्लिक करके ट्रेडिंगव्यू पर चार्ट देखें",
+                        validate="^https://.*",
+                        display_text="📈 Open"
                     )
-                ]
+                }
             )
-
-            col1.metric(
-                "Total Stocks",
-                len(result_df)
-            )
-
-            col2.metric(
-                "🟢 BUY",
-                buy_count
-            )
-
-            col3.metric(
-                "🔴 SELL",
-                sell_count
-            )
-
-            col4.metric(
-                "👀 WATCH",
-                watch_count
-            )
-
-            st.success(
-                "Scan completed successfully."
-            )
-
-else:
-
-    st.write(
-        "ऊपर **🔎 Scan Zones** दबाकर "
-        "चयनित Stocks का scan शुरू करें।"
-    )
+        else:
+            st.warning("⚠️ चुने गए शेयरों और टाइमफ्रेम पर कोई ज़ोन नहीं मिला। कृपया दूसरा टाइमफ्रेम या शेयर आज़माएं।")
 
 # ============================================================
 # FOOTER
 # ============================================================
-
 st.divider()
-
-st.caption(
-    "BrG Zone Scanner | "
-    "For analysis and educational use only."
-)
+st.caption("Institutional D&S Zone Scanner | Custom Multi-Timeframe Build")
