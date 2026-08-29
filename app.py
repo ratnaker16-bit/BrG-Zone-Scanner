@@ -1,253 +1,1009 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import yfinance as yf
+from datetime import datetime
+import pytz
+import time
 
 # ============================================================
-# Page Configuration
+# SUMAN INTRADAY STOCK SCREENER V2.0
 # ============================================================
+# 9:19 AM DAILY SECTOR HEATMAP SCANNER
+#
+# DAILY % CHANGE:
+# Previous Trading Day Close -> Current LTP
+#
+# OUTPUT:
+# 1. Top Gainer Sector
+# 2. Top 3 Gainer F&O Stocks
+# 3. Top Loser Sector
+# 4. Top 3 Loser F&O Stocks
+#
+# INDICATORS:
+# LTP
+# Daily % Change
+# VWAP
+# EMA20
+# RSI(9)
+# Volume
+# Volume Ratio
+# Signal
+#
+# NO SUPPLY / DEMAND ZONES
+# NO BOXES
+# NO LIQUIDITY ZONES
+# ============================================================
+
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
 st.set_page_config(
-    page_title="Institutional D&S Zone Scanner",
-    page_icon="📈",
+    page_title="Suman Intraday Screener",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("📈 Institutional D&S Zone Scanner")
-st.caption("Advanced Supply & Demand Zone Scanner | Smart Money Concepts")
+st.title("📊 Suman Intraday Stock Screener")
+st.caption(
+    "9:19 AM Sector Heatmap → F&O Top Gainers / Top Losers"
+)
+
 
 # ============================================================
-# NSE STOCKS LIST
+# TIMEZONE
 # ============================================================
-NSE_STOCKS = {
-    "RELIANCE": "RELIANCE.NS", "TCS": "TCS.NS", "INFY": "INFY.NS",
-    "HDFCBANK": "HDFCBANK.NS", "ICICIBANK": "ICICIBANK.NS", "SBIN": "SBIN.NS",
-    "AXISBANK": "AXISBANK.NS", "KOTAKBANK": "KOTAKBANK.NS", "LT": "LT.NS",
-    "BHARTIARTL": "BHARTIARTL.NS", "ITC": "ITC.NS", "HINDUNILVR": "HINDUNILVR.NS",
-    "MARUTI": "MARUTI.NS", "M&M": "M&M.NS", "TATAMOTORS": "TATAMOTORS.NS",
-    "TATASTEEL": "TATASTEEL.NS", "HINDALCO": "HINDALCO.NS", "ADANIENT": "ADANIENT.NS",
-    "ADANIPORTS": "ADANIPORTS.NS", "SUNPHARMA": "SUNPHARMA.NS", "BAJFINANCE": "BAJFINANCE.NS",
-    "BAJAJFINSV": "BAJAJFINSV.NS", "WIPRO": "WIPRO.NS", "HCLTECH": "HCLTECH.NS",
-    "TECHM": "TECHM.NS", "COALINDIA": "COALINDIA.NS", "ONGC": "ONGC.NS",
-    "NTPC": "NTPC.NS", "POWERGRID": "POWERGRID.NS", "JSWSTEEL": "JSWSTEEL.NS",
-    "TATACONSUM": "TATACONSUM.NS", "TITAN": "TITAN.NS", "ULTRACEMCO": "ULTRACEMCO.NS",
-    "ASIANPAINT": "ASIANPAINT.NS", "EICHERMOT": "EICHERMOT.NS", "HEROMOTOCO": "HEROMOTOCO.NS",
-    "BAJAJ-AUTO": "BAJAJ-AUTO.NS", "DRREDDY": "DRREDDY.NS", "CIPLA": "CIPLA.NS",
-    "DIVISLAB": "DIVISLAB.NS", "APOLLOHOSP": "APOLLOHOSP.NS", "BEL": "BEL.NS",
-    "HAL": "HAL.NS", "TRENT": "TRENT.NS", "INDUSINDBK": "INDUSINDBK.NS",
-    "BANKBARODA": "BANKBARODA.NS", "PNB": "PNB.NS", "CANBK": "CANBK.NS",
-    "IDFCFIRSTB": "IDFCFIRSTB.NS", "IOC": "IOC.NS", "BPCL": "BPCL.NS",
-    "GAIL": "GAIL.NS", "VEDL": "VEDL.NS", "JINDALSTEL": "JINDALSTEL.NS",
-    "SAIL": "SAIL.NS", "INDHOTEL": "INDHOTEL.NS", "DLF": "DLF.NS",
-    "IRCTC": "IRCTC.NS", "ZOMATO": "ZOMATO.NS", "UPL": "UPL.NS", "RECLTD": "RECLTD.NS", "HDFCAMC": "HDFCAMC.NS"
+
+INDIA_TZ = pytz.timezone("Asia/Kolkata")
+
+now = datetime.now(INDIA_TZ)
+
+current_time = now.strftime("%H:%M:%S")
+
+market_date = now.strftime("%d-%m-%Y")
+
+
+# ============================================================
+# SCAN TIME
+# ============================================================
+
+SCAN_HOUR = 9
+SCAN_MINUTE = 19
+
+
+def is_scan_time():
+
+    return (
+        now.hour > SCAN_HOUR
+        or
+        (
+            now.hour == SCAN_HOUR
+            and now.minute >= SCAN_MINUTE
+        )
+    )
+
+
+# ============================================================
+# SECTOR STOCK LIST
+# ============================================================
+# F&O-focused NSE stock universe
+# ============================================================
+
+SECTORS = {
+
+    "NIFTY BANK": [
+        "HDFCBANK.NS",
+        "ICICIBANK.NS",
+        "SBIN.NS",
+        "AXISBANK.NS",
+        "KOTAKBANK.NS",
+        "INDUSINDBK.NS",
+        "BANKBARODA.NS",
+        "PNB.NS"
+    ],
+
+    "NIFTY IT": [
+        "TCS.NS",
+        "INFY.NS",
+        "HCLTECH.NS",
+        "WIPRO.NS",
+        "TECHM.NS",
+        "LTIM.NS",
+        "MPHASIS.NS",
+        "PERSISTENT.NS"
+    ],
+
+    "NIFTY AUTO": [
+        "MARUTI.NS",
+        "M&M.NS",
+        "TATAMOTORS.NS",
+        "EICHERMOT.NS",
+        "HEROMOTOCO.NS",
+        "BAJAJ-AUTO.NS",
+        "TVSMOTOR.NS",
+        "ASHOKLEY.NS"
+    ],
+
+    "NIFTY PHARMA": [
+        "SUNPHARMA.NS",
+        "DRREDDY.NS",
+        "CIPLA.NS",
+        "DIVISLAB.NS",
+        "APOLLOHOSP.NS",
+        "LUPIN.NS",
+        "AUROPHARMA.NS",
+        "BIOCON.NS"
+    ],
+
+    "NIFTY FMCG": [
+        "HINDUNILVR.NS",
+        "ITC.NS",
+        "NESTLEIND.NS",
+        "BRITANNIA.NS",
+        "TATACONSUM.NS",
+        "DABUR.NS",
+        "MARICO.NS",
+        "COLPAL.NS"
+    ],
+
+    "NIFTY METAL": [
+        "TATASTEEL.NS",
+        "HINDALCO.NS",
+        "JSWSTEEL.NS",
+        "COALINDIA.NS",
+        "VEDL.NS",
+        "JINDALSTEL.NS",
+        "NMDC.NS",
+        "SAIL.NS"
+    ],
+
+    "NIFTY ENERGY": [
+        "RELIANCE.NS",
+        "NTPC.NS",
+        "POWERGRID.NS",
+        "ONGC.NS",
+        "BPCL.NS",
+        "IOC.NS",
+        "GAIL.NS",
+        "ADANIGREEN.NS"
+    ],
+
+    "NIFTY REALTY": [
+        "DLF.NS",
+        "LODHA.NS",
+        "GODREJPROP.NS",
+        "OBEROIRLTY.NS",
+        "PRESTIGE.NS",
+        "PHOENIXLTD.NS"
+    ]
 }
 
+
 # ============================================================
-# DATA FETCHING & TIMEFRAME HANDLING
+# RSI FUNCTION
 # ============================================================
-def fetch_data(symbol, timeframe):
-    if timeframe == "1 Minute":
-        interval, period = "1m", "7d"
-    elif timeframe == "5 Minutes":
-        interval, period = "5m", "59d"
-    elif timeframe == "15 Minutes":
-        interval, period = "15m", "59d"
-    elif timeframe == "1 Hour":
-        interval, period = "1h", "730d"
-    elif timeframe == "4 Hours":
-        # Yahoo Finance सीधे 4h नहीं देता, इसलिए 1h डेटा को रीसेंपल (Resample) करेंगे
-        interval, period = "1h", "730d"
-    elif timeframe == "Daily":
-        interval, period = "1d", "max"
-    else:
-        interval, period = "1d", "max"
+
+def calculate_rsi(series, period=9):
+
+    delta = series.diff()
+
+    gain = delta.clip(lower=0)
+
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.ewm(
+        alpha=1 / period,
+        min_periods=period,
+        adjust=False
+    ).mean()
+
+    avg_loss = loss.ewm(
+        alpha=1 / period,
+        min_periods=period,
+        adjust=False
+    ).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+
+    rsi = 100 - (
+        100 / (1 + rs)
+    )
+
+    return rsi
+
+
+# ============================================================
+# STOCK ANALYSIS
+# ============================================================
+
+def analyze_stock(symbol):
 
     try:
-        df = yf.download(symbol, period=period, interval=interval, progress=False, auto_adjust=False)
-        if df is None or df.empty:
-            return pd.DataFrame()
 
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+        # ----------------------------------------------------
+        # INTRADAY DATA
+        # ----------------------------------------------------
 
-        # यदि टाइमफ्रेम 4 Hours है, तो 1-hour डेटा को 4 घंटे में बदलें
-        if timeframe == "4 Hours":
-            df = df.resample('4h').agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
-            }).dropna()
+        data = yf.download(
+            symbol,
+            period="2d",
+            interval="5m",
+            progress=False,
+            auto_adjust=False,
+            threads=False
+        )
 
-        required_cols = ["Open", "High", "Low", "Close", "Volume"]
-        if not all(col in df.columns for col in required_cols):
-            return pd.DataFrame()
+        if data is None or data.empty:
+            return None
 
-        return df[required_cols].dropna()
+        # ----------------------------------------------------
+        # REMOVE MULTI INDEX
+        # ----------------------------------------------------
+
+        if isinstance(
+            data.columns,
+            pd.MultiIndex
+        ):
+
+            data.columns = (
+                data.columns
+                .get_level_values(0)
+            )
+
+        required = [
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Volume"
+        ]
+
+        for col in required:
+
+            if col not in data.columns:
+                return None
+
+        data = data.dropna()
+
+        if len(data) < 25:
+            return None
+
+        close = data["Close"]
+
+        high = data["High"]
+
+        low = data["Low"]
+
+        volume = data["Volume"]
+
+
+        # ====================================================
+        # CURRENT LTP
+        # ====================================================
+
+        ltp = float(
+            close.iloc[-1]
+        )
+
+
+        # ====================================================
+        # PREVIOUS TRADING DAY CLOSE
+        # ====================================================
+
+        daily_data = yf.download(
+            symbol,
+            period="10d",
+            interval="1d",
+            progress=False,
+            auto_adjust=False,
+            threads=False
+        )
+
+        if (
+            daily_data is None
+            or daily_data.empty
+        ):
+            return None
+
+
+        if isinstance(
+            daily_data.columns,
+            pd.MultiIndex
+        ):
+
+            daily_data.columns = (
+                daily_data.columns
+                .get_level_values(0)
+            )
+
+
+        if "Close" not in daily_data.columns:
+            return None
+
+
+        daily_close = (
+            daily_data["Close"]
+            .dropna()
+        )
+
+
+        if len(daily_close) < 2:
+            return None
+
+
+        # Last completed daily candle
+        previous_close = float(
+            daily_close.iloc[-2]
+        )
+
+
+        if previous_close <= 0:
+            return None
+
+
+        # ====================================================
+        # DAILY % CHANGE
+        # ====================================================
+        # Previous Trading Day Close -> Current LTP
+        # ====================================================
+
+        change_pct = (
+            (
+                ltp - previous_close
+            )
+            / previous_close
+        ) * 100
+
+
+        # ====================================================
+        # VWAP
+        # ====================================================
+
+        typical_price = (
+            high + low + close
+        ) / 3
+
+
+        cumulative_volume = (
+            volume.cumsum()
+        )
+
+
+        cumulative_pv = (
+            typical_price * volume
+        ).cumsum()
+
+
+        vwap_series = (
+            cumulative_pv
+            /
+            cumulative_volume.replace(
+                0,
+                np.nan
+            )
+        )
+
+
+        vwap = float(
+            vwap_series.iloc[-1]
+        )
+
+
+        # ====================================================
+        # EMA 20
+        # ====================================================
+
+        ema20 = float(
+            close.ewm(
+                span=20,
+                adjust=False
+            ).mean().iloc[-1]
+        )
+
+
+        # ====================================================
+        # RSI 9
+        # ====================================================
+
+        rsi_series = calculate_rsi(
+            close,
+            9
+        )
+
+
+        rsi9 = float(
+            rsi_series.iloc[-1]
+        )
+
+
+        # ====================================================
+        # CURRENT VOLUME
+        # ====================================================
+
+        current_volume = float(
+            volume.iloc[-1]
+        )
+
+
+        # ====================================================
+        # AVERAGE VOLUME
+        # ====================================================
+
+        if len(volume) >= 21:
+
+            avg_volume = float(
+                volume.iloc[-21:-1].mean()
+            )
+
+        else:
+
+            avg_volume = float(
+                volume.iloc[:-1].mean()
+            )
+
+
+        if avg_volume > 0:
+
+            volume_ratio = (
+                current_volume
+                / avg_volume
+            )
+
+        else:
+
+            volume_ratio = 0
+
+
+        # ====================================================
+        # VWAP STATUS
+        # ====================================================
+
+        if ltp > vwap:
+
+            vwap_status = "Above"
+
+        elif ltp < vwap:
+
+            vwap_status = "Below"
+
+        else:
+
+            vwap_status = "At VWAP"
+
+
+        # ====================================================
+        # SIGNAL
+        # ====================================================
+
+        if (
+            ltp > vwap
+            and
+            ltp > ema20
+            and
+            rsi9 > 55
+        ):
+
+            signal = "🟢 BULLISH"
+
+        elif (
+            ltp < vwap
+            and
+            ltp < ema20
+            and
+            rsi9 < 45
+        ):
+
+            signal = "🔴 BEARISH"
+
+        else:
+
+            signal = "⚪ WAIT"
+
+
+        # ====================================================
+        # RESULT
+        # ====================================================
+
+        return {
+
+            "Symbol":
+                symbol.replace(
+                    ".NS",
+                    ""
+                ),
+
+            "LTP":
+                round(
+                    ltp,
+                    2
+                ),
+
+            "% Change":
+                round(
+                    change_pct,
+                    2
+                ),
+
+            "Prev Close":
+                round(
+                    previous_close,
+                    2
+                ),
+
+            "VWAP":
+                round(
+                    vwap,
+                    2
+                ),
+
+            "VWAP Status":
+                vwap_status,
+
+            "EMA20":
+                round(
+                    ema20,
+                    2
+                ),
+
+            "RSI(9)":
+                round(
+                    rsi9,
+                    2
+                ),
+
+            "Volume":
+                int(
+                    current_volume
+                ),
+
+            "Volume x":
+                round(
+                    volume_ratio,
+                    2
+                ),
+
+            "Signal":
+                signal
+        }
+
+
     except Exception:
-        return pd.DataFrame()
+
+        return None
+
 
 # ============================================================
-# ZONE IDENTIFICATION & STATUS (Fresh/Tested/HQ)
+# SECTOR ANALYSIS
 # ============================================================
-def identify_zones(df, symbol, timeframe):
-    zones = []
-    if len(df) < 10:
-        return zones
 
-    for i in range(2, len(df) - 2):
-        prev_open = float(df["Open"].iloc[i - 1])
-        prev_close = float(df["Close"].iloc[i - 1])
+def analyze_sector(
+    sector,
+    stocks,
+    progress_bar=None,
+    current_count=0,
+    total_count=1
+):
 
-        base_open = float(df["Open"].iloc[i])
-        base_close = float(df["Close"].iloc[i])
-        base_high = float(df["High"].iloc[i])
-        base_low = float(df["Low"].iloc[i])
+    results = []
 
-        base_body = abs(base_close - base_open)
-        base_range = base_high - base_low
+    for stock in stocks:
 
-        if base_range <= 0 or (base_body / base_range) > 0.40:
-            continue
+        result = analyze_stock(
+            stock
+        )
 
-        next_open = float(df["Open"].iloc[i + 1])
-        next_close = float(df["Close"].iloc[i + 1])
-        next_high = float(df["High"].iloc[i + 1])
-        next_low = float(df["Low"].iloc[i + 1])
+        if result is not None:
 
-        next_body = abs(next_close - next_open)
-        next_range = next_high - next_low
+            results.append(
+                result
+            )
 
-        if next_range <= 0 or (next_body / next_range) < 0.60:
-            continue
+        if progress_bar is not None:
 
-        zone_type = None
-        # Demand (Drop -> Base -> Rally)
-        if prev_close < prev_open and next_close > next_open:
-            zone_type = "DEMAND"
-        # Supply (Rally -> Base -> Drop)
-        elif prev_close > prev_open and next_close < next_open:
-            zone_type = "SUPPLY"
+            current_count += 1
 
-        if zone_type:
-            z_high = round(base_high, 2)
-            z_low = round(base_low, 2)
-            
-            # चेक करें कि ज़ोन बनने के बाद कीमत दोबारा उस ज़ोन में आई या नहीं (Fresh vs Tested)
-            is_tested = False
-            for j in range(i + 2, len(df)):
-                curr_l = df["Low"].iloc[j]
-                curr_h = df["High"].iloc[j]
-                if zone_type == "DEMAND" and curr_l <= z_high:
-                    is_tested = True
-                    break
-                elif zone_type == "SUPPLY" and curr_h >= z_low:
-                    is_tested = True
-                    break
+            progress_bar.progress(
+                min(
+                    current_count
+                    / total_count,
+                    1.0
+                )
+            )
 
-            status = "Tested" if is_tested else "Fresh"
-            
-            # High Quality (HQ) निर्धारण: अगर वॉल्यूम मजबूत है या बड़ा डिपार्चर है
-            is_hq = next_body > (base_range * 1.5)
-            hq_label = "★ HQ" if is_hq else "Standard"
 
-            # ट्रेडिंगव्यू का डायरेक्ट चार्ट लिंक फॉर्मेट
-            clean_symbol = symbol.replace(".NS", "")
-            tv_link = f"https://www.tradingview.com/chart/?symbol=NSE:{clean_symbol}"
+    if not results:
 
-            zones.append({
-                "एसेट": clean_symbol,
-                "चार्ट खोलें": tv_link,
-                "टाइमफ्रेम": timeframe,
-                "दिशा": f"🟢 DEMAND" if zone_type == "DEMAND" else f"🔴 SUPPLY",
-                "पैटर्न": "Drop-Base-Rally" if zone_type == "DEMAND" else "Rally-Base-Drop",
-                "ज़ोन हाई": z_high,
-                "ज़ोन लो": z_low,
-                "स्थिति": status,
-                "क्वालिटी": hq_label,
-                "समय": str(df.index[i])
+        return None, None
+
+
+    df = pd.DataFrame(
+        results
+    )
+
+
+    # ========================================================
+    # SECTOR DAILY PERFORMANCE
+    # ========================================================
+
+    sector_change = float(
+        df["% Change"].mean()
+    )
+
+
+    return (
+        sector_change,
+        df
+    )
+
+
+# ============================================================
+# MAIN SCANNER
+# ============================================================
+
+def run_scanner():
+
+    all_sector_data = {}
+
+    total_stocks = sum(
+        len(stocks)
+        for stocks in SECTORS.values()
+    )
+
+    progress = st.progress(
+        0
+    )
+
+    scanned = 0
+
+
+    for sector, stocks in SECTORS.items():
+
+        results = []
+
+        for stock in stocks:
+
+            result = analyze_stock(
+                stock
+            )
+
+            scanned += 1
+
+            progress.progress(
+                min(
+                    scanned
+                    / total_stocks,
+                    1.0
+                )
+            )
+
+
+            if result is not None:
+
+                results.append(
+                    result
+                )
+
+
+        if results:
+
+            stock_df = pd.DataFrame(
+                results
+            )
+
+
+            sector_change = float(
+                stock_df[
+                    "% Change"
+                ].mean()
+            )
+
+
+            all_sector_data[
+                sector
+            ] = {
+
+                "change":
+                    sector_change,
+
+                "stocks":
+                    stock_df
+            }
+
+
+    progress.empty()
+
+    return all_sector_data
+
+
+# ============================================================
+# MARKET TIME DISPLAY
+# ============================================================
+
+st.info(
+    f"🇮🇳 Indian Market Time: "
+    f"{market_date} {current_time}"
+)
+
+
+# ============================================================
+# MARKET STATUS
+# ============================================================
+
+if not is_scan_time():
+
+    st.warning(
+        "⏳ Scanner 9:19 AM के बाद "
+        "Daily Market Scan करेगा।"
+    )
+
+    st.write(
+        "9:19 AM के बाद app को refresh "
+        "करें। Scanner automatic scan करेगा।"
+    )
+
+
+# ============================================================
+# AUTOMATIC 9:19 SCAN
+# ============================================================
+
+auto_scan = False
+
+
+if is_scan_time():
+
+    last_scan_date = st.session_state.get(
+        "last_scan_date",
+        None
+    )
+
+
+    today_string = now.strftime(
+        "%Y-%m-%d"
+    )
+
+
+    if last_scan_date != today_string:
+
+        auto_scan = True
+
+
+# ============================================================
+# MANUAL SCAN
+# ============================================================
+
+manual_scan = st.button(
+    "🔎 SCAN NOW",
+    use_container_width=True
+)
+
+
+# ============================================================
+# RUN SCANNER
+# ============================================================
+
+if auto_scan or manual_scan:
+
+    with st.spinner(
+        "📊 Scanning F&O stocks and sectors..."
+    ):
+
+        sector_data = run_scanner()
+
+
+    if auto_scan:
+
+        st.session_state[
+            "last_scan_date"
+        ] = now.strftime(
+            "%Y-%m-%d"
+        )
+
+
+    if not sector_data:
+
+        st.error(
+            "❌ Market data उपलब्ध नहीं है। "
+            "थोड़ी देर बाद फिर Scan करें।"
+        )
+
+
+    else:
+
+        # ====================================================
+        # SECTOR RANKING
+        # ====================================================
+
+        sector_rows = []
+
+
+        for sector, info in sector_data.items():
+
+            sector_rows.append({
+
+                "Sector":
+                    sector,
+
+                "% Change":
+                    round(
+                        info["change"],
+                        2
+                    )
             })
 
-    return zones
 
-# ============================================================
-# SIDEBAR CONTROLS
-# ============================================================
-st.sidebar.header("⚙️ Scanner Settings")
+        sector_df = pd.DataFrame(
+            sector_rows
+        )
 
-selected_stocks = st.sidebar.multiselect(
-    "शेयर चुनें (NSE Stocks)",
-    list(NSE_STOCKS.keys()),
-    default=["RELIANCE", "HDFCBANK", "ICICIBANK", "SBIN", "TATASTEEL", "UPL", "RECLTD", "HDFCAMC"]
-)
 
-timeframe = st.sidebar.selectbox(
-    "टाइमफ्रेम चुनें",
-    ["1 Minute", "5 Minutes", "15 Minutes", "1 Hour", "4 Hours", "Daily"],
-    index=3
-)
-
-# ============================================================
-# MAIN SCANNER EXECUTION
-# ============================================================
-if st.button("🚀 स्कैन शुरू करें", use_container_width=True):
-    if not selected_stocks:
-        st.warning("⚠️ कृपया कम से कम एक शेयर चुनें।")
-    else:
-        all_zones = []
-        progress_bar = st.progress(0)
-        total_stocks = len(selected_stocks)
-
-        with st.spinner(f"स्कैनिंग जारी है ({timeframe})..."):
-            for idx, stock_name in enumerate(selected_stocks):
-                symbol_code = NSE_STOCKS[stock_name]
-                df = fetch_data(symbol_code, timeframe)
-                if not df.empty:
-                    stock_zones = identify_zones(df, symbol_code, timeframe)
-                    all_zones.extend(stock_zones)
-                progress_bar.progress(int(((idx + 1) / total_stocks) * 100))
-
-        progress_bar.empty()
-
-        if all_zones:
-            res_df = pd.DataFrame(all_zones)
-            
-            # डैशबोर्ड मैट्रिक्स कैलकुलेशन
-            total_zones_count = len(res_df)
-            fresh_count = len(res_df[res_df["स्थिति"] == "Fresh"])
-            tested_count = len(res_df[res_df["स्थिति"] == "Tested"])
-            hq_count = len(res_df[res_df["क्वालिटी"] == "★ HQ"])
-
-            # स्क्रीनशॉट जैसा टॉप डैशबोर्ड बॉक्स
-            st.markdown(
-                f"""
-                <div style="background-color: #0f172a; padding: 15px; border-radius: 10px; color: white; margin-bottom: 20px;">
-                    <p style="margin: 0; font-size: 16px;">📦 कुल Zones: <b>{total_zones_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; 🟢 Fresh: <b>{fresh_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; 🟡 Tested: <b>{tested_count}</b> &nbsp;&nbsp;|&nbsp;&nbsp; ⭐ HQ: <b>{hq_count}</b></p>
-                </div>
-                """, 
-                unsafe_allow_html=True
+        sector_df = (
+            sector_df
+            .sort_values(
+                "% Change",
+                ascending=False
             )
-
-            st.success(f"सफलतापूर्वक स्कैन पूरा हुआ! कुल {total_zones_count} ज़ोन मिले।")
-
-            # डेटा टेबल दिखाना (TradingView लिंक्स को क्लिकेबल बनाने के लिए st.data_editor या st.dataframe का उपयोग)
-            st.dataframe(
-                res_df,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "चार्ट खोलें": st.column_config.LinkColumn(
-                        "📊 चार्ट खोलें",
-                        help="क्लिक करके ट्रेडिंगव्यू पर चार्ट देखें",
-                        validate="^https://.*",
-                        display_text="📈 Open"
-                    )
-                }
+            .reset_index(
+                drop=True
             )
-        else:
-            st.warning("⚠️ चुने गए शेयरों और टाइमफ्रेम पर कोई ज़ोन नहीं मिला। कृपया दूसरा टाइमफ्रेम या शेयर आज़माएं।")
+        )
+
+
+        # ====================================================
+        # TOP GAINER SECTOR
+        # ====================================================
+
+        top_gainer_sector = (
+            sector_df.iloc[0]["Sector"]
+        )
+
+
+        top_gainer_change = (
+            sector_df.iloc[0]["% Change"]
+        )
+
+
+        # ====================================================
+        # TOP LOSER SECTOR
+        # ====================================================
+
+        top_loser_sector = (
+            sector_df.iloc[-1]["Sector"]
+        )
+
+
+        top_loser_change = (
+            sector_df.iloc[-1]["% Change"]
+        )
+
+
+        # ====================================================
+        # SECTOR HEATMAP
+        # ====================================================
+
+        st.subheader(
+            "🔥 Sector Heatmap"
+        )
+
+
+        st.dataframe(
+            sector_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+        # ====================================================
+        # TOP GAINER SECTOR
+        # ====================================================
+
+        st.subheader(
+            f"🟢 TOP GAINER SECTOR: "
+            f"{top_gainer_sector} "
+            f"({top_gainer_change:+.2f}%)"
+        )
+
+
+        gainer_df = (
+            sector_data[
+                top_gainer_sector
+            ]["stocks"]
+            .copy()
+        )
+
+
+        gainer_df = (
+            gainer_df
+            .sort_values(
+                "% Change",
+                ascending=False
+            )
+            .head(3)
+            .reset_index(
+                drop=True
+            )
+        )
+
+
+        st.dataframe(
+            gainer_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+        # ====================================================
+        # TOP LOSER SECTOR
+        # ====================================================
+
+        st.subheader(
+            f"🔴 TOP LOSER SECTOR: "
+            f"{top_loser_sector} "
+            f"({top_loser_change:+.2f}%)"
+        )
+
+
+        loser_df = (
+            sector_data[
+                top_loser_sector
+            ]["stocks"]
+            .copy()
+        )
+
+
+        loser_df = (
+            loser_df
+            .sort_values(
+                "% Change",
+                ascending=True
+            )
+            .head(3)
+            .reset_index(
+                drop=True
+            )
+        )
+
+
+        st.dataframe(
+            loser_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+        # ====================================================
+        # SCAN TIME
+        # ====================================================
+
+        scan_timestamp = datetime.now(
+            INDIA_TZ
+        ).strftime(
+            "%H:%M:%S"
+        )
+
+
+        st.success(
+            f"✅ Scan Complete at "
+            f"{scan_timestamp} IST"
+        )
+
+
+        st.caption(
+            "Daily % Change = "
+            "Previous Trading Day Close → Current LTP"
+        )
+
 
 # ============================================================
 # FOOTER
 # ============================================================
-st.divider()
-st.caption("Institutional D&S Zone Scanner | Custom Multi-Timeframe Build")
+
+st.markdown("---")
+
+st.caption(
+    "Suman Intraday Stock Screener V2.0 | "
+    "9:19 AM Sector Heatmap | "
+    "F&O Stocks | "
+    "Daily % Change + VWAP + EMA20 + RSI(9)"
+)
