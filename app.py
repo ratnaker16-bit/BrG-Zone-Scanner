@@ -4,25 +4,43 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, time as dt_time
 import pytz
+import time
 
 # ============================================================
-# SUMAN INTRADAY STOCK SCREENER V3.1
+# SUMAN INTRADAY STOCK SCREENER V3.3 PRO
 # ============================================================
-# 9:20 AM FIRST 5-MINUTE CANDLE SCANNER
+#
+# 9:20 AM FIRST 5-MINUTE CANDLE STRATEGY
 #
 # LOGIC:
 #
-# TOP GAINER SECTOR
-#   1. Sector Heatmap से सबसे मजबूत sector
-#   2. 9:15-9:20 candle GREEN
-#   3. Previous Day Close से +4% से ज्यादा नहीं
-#   4. 5M strength के आधार पर Top 3
+# STEP 1
+# Sector Heatmap से Top Gainer Sector
+# और Top Loser Sector निकालना
 #
-# TOP LOSER SECTOR
-#   1. Sector Heatmap से सबसे कमजोर sector
-#   2. 9:15-9:20 candle RED
-#   3. Previous Day Close से -4% से ज्यादा नहीं
-#   4. 5M weakness के आधार पर Top 3
+# STEP 2
+# Top Gainer Sector के F&O stocks:
+#   • 9:15–9:20 candle GREEN
+#   • Previous Close से +4% से अधिक नहीं
+#
+# Top Loser Sector के F&O stocks:
+#   • 9:15–9:20 candle RED
+#   • Previous Close से -4% से अधिक नहीं
+#
+# STEP 3
+# 5M strength / weakness के आधार पर Top 3
+#
+# INDICATORS:
+#   Previous Close
+#   5M OHLC
+#   5M %
+#   Previous Close %
+#   Volume
+#   Volume x
+#   VWAP
+#   EMA20
+#   RSI9
+#   Signal
 #
 # ============================================================
 
@@ -32,15 +50,15 @@ import pytz
 # ============================================================
 
 st.set_page_config(
-    page_title="Suman Intraday Screener V3.1",
+    page_title="Suman Intraday Screener V3.3",
     page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Suman Intraday Stock Screener V3.1")
+st.title("📊 Suman Intraday Stock Screener V3.3 PRO")
 
 st.caption(
-    "Sector Heatmap → First 5M Candle → "
+    "Sector Heatmap → 9:15–9:20 First 5M Candle → "
     "Top 3 Gainers / Top 3 Losers"
 )
 
@@ -78,12 +96,22 @@ def is_scan_time():
 
 
 # ============================================================
-# SECTOR STOCK LIST
+# SECTOR → STOCK MAPPING
+# ============================================================
+#
+# F&O focused universe
+#
+# IMPORTANT:
+# Same stock can technically belong to
+# more than one economic sector.
+#
+# Sector selection is handled separately.
+#
 # ============================================================
 
 SECTORS = {
 
-    "NIFTY BANK": [
+    "BANK": [
         "HDFCBANK.NS",
         "ICICIBANK.NS",
         "SBIN.NS",
@@ -91,10 +119,22 @@ SECTORS = {
         "KOTAKBANK.NS",
         "INDUSINDBK.NS",
         "BANKBARODA.NS",
-        "PNB.NS"
+        "PNB.NS",
+        "IDFCFIRSTB.NS",
+        "FEDERALBNK.NS"
     ],
 
-    "NIFTY IT": [
+    "FINANCIAL SERVICES": [
+        "BAJFINANCE.NS",
+        "BAJAJFINSV.NS",
+        "SHRIRAMFIN.NS",
+        "CHOLAFIN.NS",
+        "PFC.NS",
+        "RECLTD.NS",
+        "MUTHOOTFIN.NS"
+    ],
+
+    "IT": [
         "TCS.NS",
         "INFY.NS",
         "HCLTECH.NS",
@@ -102,10 +142,12 @@ SECTORS = {
         "TECHM.NS",
         "LTIM.NS",
         "MPHASIS.NS",
-        "PERSISTENT.NS"
+        "PERSISTENT.NS",
+        "COFORGE.NS",
+        "OFSS.NS"
     ],
 
-    "NIFTY AUTO": [
+    "AUTO": [
         "MARUTI.NS",
         "M&M.NS",
         "TATAMOTORS.NS",
@@ -113,21 +155,37 @@ SECTORS = {
         "HEROMOTOCO.NS",
         "BAJAJ-AUTO.NS",
         "TVSMOTOR.NS",
-        "ASHOKLEY.NS"
+        "ASHOKLEY.NS",
+        "BHARATFORG.NS",
+        "BOSCHLTD.NS"
     ],
 
-    "NIFTY PHARMA": [
+    "PHARMA": [
         "SUNPHARMA.NS",
         "DRREDDY.NS",
         "CIPLA.NS",
         "DIVISLAB.NS",
-        "APOLLOHOSP.NS",
         "LUPIN.NS",
         "AUROPHARMA.NS",
-        "BIOCON.NS"
+        "BIOCON.NS",
+        "TORNTPHARM.NS",
+        "ZYDUSLIFE.NS",
+        "ALKEM.NS"
     ],
 
-    "NIFTY FMCG": [
+    "HEALTHCARE": [
+        "APOLLOHOSP.NS",
+        "MAXHEALTH.NS",
+        "FORTIS.NS",
+        "SYNGENE.NS",
+        "LALPATHLAB.NS",
+        "METROPOLIS.NS",
+        "MEDANTA.NS",
+        "POLYMED.NS",
+        "RAINBOW.NS"
+    ],
+
+    "FMCG": [
         "HINDUNILVR.NS",
         "ITC.NS",
         "NESTLEIND.NS",
@@ -135,10 +193,12 @@ SECTORS = {
         "TATACONSUM.NS",
         "DABUR.NS",
         "MARICO.NS",
-        "COLPAL.NS"
+        "COLPAL.NS",
+        "GODREJCP.NS",
+        "VBL.NS"
     ],
 
-    "NIFTY METAL": [
+    "METAL": [
         "TATASTEEL.NS",
         "HINDALCO.NS",
         "JSWSTEEL.NS",
@@ -146,10 +206,12 @@ SECTORS = {
         "VEDL.NS",
         "JINDALSTEL.NS",
         "NMDC.NS",
-        "SAIL.NS"
+        "SAIL.NS",
+        "NATIONALUM.NS",
+        "HINDZINC.NS"
     ],
 
-    "NIFTY ENERGY": [
+    "ENERGY": [
         "RELIANCE.NS",
         "NTPC.NS",
         "POWERGRID.NS",
@@ -157,16 +219,122 @@ SECTORS = {
         "BPCL.NS",
         "IOC.NS",
         "GAIL.NS",
-        "ADANIGREEN.NS"
+        "ADANIGREEN.NS",
+        "ADANIENSOL.NS",
+        "TATAPOWER.NS"
     ],
 
-    "NIFTY REALTY": [
+    "OIL & GAS": [
+        "RELIANCE.NS",
+        "ONGC.NS",
+        "BPCL.NS",
+        "IOC.NS",
+        "GAIL.NS",
+        "PETRONET.NS",
+        "HINDPETRO.NS",
+        "IGL.NS",
+        "MGL.NS",
+        "ATGL.NS"
+    ],
+
+    "REALTY": [
         "DLF.NS",
         "LODHA.NS",
         "GODREJPROP.NS",
         "OBEROIRLTY.NS",
         "PRESTIGE.NS",
-        "PHOENIXLTD.NS"
+        "PHOENIXLTD.NS",
+        "SOBHA.NS",
+        "BRIGADE.NS",
+        "MACROTECH.NS",
+        "SUNTECK.NS"
+    ],
+
+    "CONSUMER DURABLES": [
+        "DIXON.NS",
+        "VOLTAS.NS",
+        "WHIRLPOOL.NS",
+        "HAVELLS.NS",
+        "CROMPTON.NS",
+        "KAYNES.NS",
+        "AMBER.NS",
+        "BLUESTARCO.NS",
+        "TITAN.NS"
+    ],
+
+    "MEDIA": [
+        "ZEEL.NS",
+        "SUNTV.NS",
+        "PVRINOX.NS",
+        "NETWORK18.NS"
+    ],
+
+    "TELECOM": [
+        "BHARTIARTL.NS",
+        "INDUSTOWER.NS",
+        "IDEA.NS"
+    ],
+
+    "CEMENT": [
+        "ULTRACEMCO.NS",
+        "GRASIM.NS",
+        "SHREECEM.NS",
+        "AMBUJACEM.NS",
+        "ACC.NS",
+        "DALBHARAT.NS",
+        "JKCEMENT.NS",
+        "RAMCOCEM.NS"
+    ],
+
+    "CAPITAL GOODS": [
+        "LT.NS",
+        "SIEMENS.NS",
+        "ABB.NS",
+        "BEL.NS",
+        "BHEL.NS",
+        "HAL.NS",
+        "RVNL.NS",
+        "BEML.NS",
+        "CGPOWER.NS",
+        "THERMAX.NS"
+    ],
+
+    "CHEMICALS": [
+        "SRF.NS",
+        "PIDILITIND.NS",
+        "UPL.NS",
+        "DEEPAKNTR.NS",
+        "PIIND.NS",
+        "AARTIIND.NS",
+        "ATUL.NS",
+        "NAVINFLUOR.NS",
+        "FLUOROCHEM.NS",
+        "TATACHEM.NS"
+    ],
+
+    "INFRASTRUCTURE": [
+        "LT.NS",
+        "ADANIPORTS.NS",
+        "RVNL.NS",
+        "IRFC.NS",
+        "NCC.NS",
+        "NBCC.NS",
+        "CONCOR.NS",
+        "GMRINFRA.NS",
+        "ASHOKLEY.NS"
+    ],
+
+    "PSU": [
+        "BEL.NS",
+        "HAL.NS",
+        "BHEL.NS",
+        "ONGC.NS",
+        "COALINDIA.NS",
+        "NTPC.NS",
+        "POWERGRID.NS",
+        "RECLTD.NS",
+        "PFC.NS",
+        "GAIL.NS"
     ]
 }
 
@@ -225,55 +393,7 @@ def clean_columns(data):
 
 
 # ============================================================
-# GET PREVIOUS TRADING DAY CLOSE
-# ============================================================
-
-def get_previous_close(symbol):
-
-    try:
-
-        daily = yf.download(
-            symbol,
-            period="15d",
-            interval="1d",
-            progress=False,
-            auto_adjust=False,
-            threads=False
-        )
-
-        if daily is None or daily.empty:
-            return None
-
-        daily = clean_columns(daily)
-
-        if "Close" not in daily.columns:
-            return None
-
-        closes = (
-            daily["Close"]
-            .dropna()
-        )
-
-        if len(closes) < 2:
-            return None
-
-        # Latest completed daily candle
-        previous_close = float(
-            closes.iloc[-2]
-        )
-
-        if previous_close <= 0:
-            return None
-
-        return previous_close
-
-    except Exception:
-
-        return None
-
-
-# ============================================================
-# NORMALIZE INTRADAY INDEX TO INDIA TIME
+# NORMALIZE INDEX
 # ============================================================
 
 def normalize_index(data):
@@ -298,7 +418,58 @@ def normalize_index(data):
 
 
 # ============================================================
-# FIND FIRST 5-MINUTE CANDLE
+# PREVIOUS DAY CLOSE
+# ============================================================
+
+def get_previous_close(symbol):
+
+    try:
+
+        daily = yf.download(
+            symbol,
+            period="15d",
+            interval="1d",
+            progress=False,
+            auto_adjust=False,
+            threads=False
+        )
+
+        if daily is None or daily.empty:
+
+            return None
+
+        daily = clean_columns(daily)
+
+        if "Close" not in daily.columns:
+
+            return None
+
+        closes = (
+            daily["Close"]
+            .dropna()
+        )
+
+        if len(closes) < 2:
+
+            return None
+
+        previous_close = float(
+            closes.iloc[-2]
+        )
+
+        if previous_close <= 0:
+
+            return None
+
+        return previous_close
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# FIRST 5 MINUTE CANDLE
 # ============================================================
 
 def get_first_5m_candle(data):
@@ -307,7 +478,6 @@ def get_first_5m_candle(data):
 
         data = normalize_index(data)
 
-        # Today's date
         today = now.date()
 
         today_data = data[
@@ -315,28 +485,26 @@ def get_first_5m_candle(data):
         ].copy()
 
         if today_data.empty:
+
             return None
 
-        # Market open window
         first_window = today_data[
             (
-                today_data.index.time >=
-                dt_time(9, 15)
+                today_data.index.time
+                >= dt_time(9, 15)
             )
             &
             (
-                today_data.index.time <
-                dt_time(9, 20)
+                today_data.index.time
+                < dt_time(9, 20)
             )
         ]
 
         if first_window.empty:
+
             return None
 
-        # First available 5-minute bar
-        candle = first_window.iloc[0]
-
-        return candle
+        return first_window.iloc[0]
 
     except Exception:
 
@@ -344,7 +512,7 @@ def get_first_5m_candle(data):
 
 
 # ============================================================
-# ANALYZE STOCK
+# STOCK ANALYSIS
 # ============================================================
 
 def analyze_stock(symbol):
@@ -352,7 +520,7 @@ def analyze_stock(symbol):
     try:
 
         # ----------------------------------------------------
-        # DOWNLOAD 5 MIN DATA
+        # 5M DATA
         # ----------------------------------------------------
 
         data = yf.download(
@@ -365,6 +533,7 @@ def analyze_stock(symbol):
         )
 
         if data is None or data.empty:
+
             return None
 
         data = clean_columns(data)
@@ -381,16 +550,18 @@ def analyze_stock(symbol):
             col in data.columns
             for col in required
         ):
+
             return None
 
         data = data.dropna()
 
         if len(data) < 20:
+
             return None
 
 
         # ----------------------------------------------------
-        # PREVIOUS DAY CLOSE
+        # PREVIOUS CLOSE
         # ----------------------------------------------------
 
         previous_close = get_previous_close(
@@ -398,11 +569,12 @@ def analyze_stock(symbol):
         )
 
         if previous_close is None:
+
             return None
 
 
         # ----------------------------------------------------
-        # FIRST 5 MINUTE CANDLE
+        # FIRST 5M CANDLE
         # ----------------------------------------------------
 
         first_candle = get_first_5m_candle(
@@ -410,6 +582,7 @@ def analyze_stock(symbol):
         )
 
         if first_candle is None:
+
             return None
 
 
@@ -435,6 +608,7 @@ def analyze_stock(symbol):
 
 
         if first_open <= 0:
+
             return None
 
 
@@ -470,12 +644,7 @@ def analyze_stock(symbol):
 
 
         # ----------------------------------------------------
-        # DAILY CHANGE
-        # Previous Close -> First 5M Close
-        #
-        # IMPORTANT:
-        # For the 9:20 decision, use 5M close
-        # instead of later LTP.
+        # PREVIOUS CLOSE → FIRST 5M CLOSE
         # ----------------------------------------------------
 
         first_5m_daily_change = (
@@ -515,12 +684,12 @@ def analyze_stock(symbol):
         )
 
         cumulative_pv = (
-            typical_price * volume
+            typical_price *
+            volume
         ).cumsum()
 
         vwap_series = (
-            cumulative_pv
-            /
+            cumulative_pv /
             cumulative_volume.replace(
                 0,
                 np.nan
@@ -559,7 +728,7 @@ def analyze_stock(symbol):
 
 
         # ----------------------------------------------------
-        # VOLUME
+        # CURRENT VOLUME
         # ----------------------------------------------------
 
         current_volume = float(
@@ -748,6 +917,40 @@ def analyze_stock(symbol):
 
 
 # ============================================================
+# SECTOR ANALYSIS
+# ============================================================
+
+def analyze_sector(
+    sector,
+    stocks
+):
+
+    results = []
+
+    for symbol in stocks:
+
+        result = analyze_stock(
+            symbol
+        )
+
+        if result is not None:
+
+            result["Sector"] = sector
+
+            results.append(
+                result
+            )
+
+    if not results:
+
+        return None
+
+    return pd.DataFrame(
+        results
+    )
+
+
+# ============================================================
 # RUN SCANNER
 # ============================================================
 
@@ -767,7 +970,7 @@ def run_scanner():
 
     for sector, stocks in SECTORS.items():
 
-        results = []
+        sector_results = []
 
 
         for symbol in stocks:
@@ -791,27 +994,27 @@ def run_scanner():
 
                 result["Sector"] = sector
 
-                results.append(
+                sector_results.append(
                     result
                 )
 
 
-        if results:
+        if sector_results:
 
             df = pd.DataFrame(
-                results
+                sector_results
             )
 
-
-            # Sector heatmap based on
-            # previous close -> first 5M close
+            # ------------------------------------------------
+            # SECTOR PERFORMANCE
+            # Previous Close → First 5M Close
+            # ------------------------------------------------
 
             sector_change = float(
                 df[
                     "Prev Close %"
                 ].mean()
             )
-
 
             all_sector_data[
                 sector
@@ -851,8 +1054,9 @@ if not is_scan_time():
     )
 
     st.write(
-        "9:15–9:20 की पहली 5-minute candle "
-        "पूरी होने के बाद SCAN NOW दबाएँ।"
+        "पहली 5-minute candle "
+        "9:15–9:20 complete होने के बाद "
+        "SCAN NOW दबाएँ।"
     )
 
 
@@ -899,7 +1103,7 @@ manual_scan = st.button(
 if auto_scan or manual_scan:
 
     with st.spinner(
-        "📊 Scanning F&O sectors and first 5-minute candles..."
+        "📊 Scanning sectors and first 5-minute candles..."
     ):
 
         sector_data = run_scanner()
@@ -925,8 +1129,7 @@ if auto_scan or manual_scan:
         )
 
         st.info(
-            "अगर market खुला है तो कुछ सेकंड बाद "
-            "SCAN NOW फिर दबाएँ।"
+            "कुछ सेकंड बाद SCAN NOW फिर दबाएँ।"
         )
 
 
@@ -998,13 +1201,12 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # HEATMAP
+        # SECTOR HEATMAP
         # ====================================================
 
         st.subheader(
-            "🔥 Sector Heatmap"
+            "🔥 SECTOR HEATMAP"
         )
-
 
         st.dataframe(
             sector_df,
@@ -1014,7 +1216,7 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # GAINER SECTOR
+        # TOP GAINER SECTOR
         # ====================================================
 
         st.subheader(
@@ -1037,7 +1239,7 @@ if auto_scan or manual_scan:
         # ====================================================
         #
         # GREEN FIRST 5M
-        # PREVIOUS CLOSE CHANGE <= +4%
+        # Previous Close <= +4%
         #
         # ====================================================
 
@@ -1102,7 +1304,9 @@ if auto_scan or manual_scan:
                         "5M Close",
                         "5M %",
                         "Prev Close %",
+                        "5M Candle",
                         "5M Volume",
+                        "LTP",
                         "VWAP",
                         "EMA20",
                         "RSI(9)",
@@ -1116,7 +1320,7 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # LOSER SECTOR
+        # TOP LOSER SECTOR
         # ====================================================
 
         st.subheader(
@@ -1139,7 +1343,7 @@ if auto_scan or manual_scan:
         # ====================================================
         #
         # RED FIRST 5M
-        # PREVIOUS CLOSE CHANGE >= -4%
+        # Previous Close >= -4%
         #
         # ====================================================
 
@@ -1204,7 +1408,9 @@ if auto_scan or manual_scan:
                         "5M Close",
                         "5M %",
                         "Prev Close %",
+                        "5M Candle",
                         "5M Volume",
+                        "LTP",
                         "VWAP",
                         "EMA20",
                         "RSI(9)",
@@ -1218,7 +1424,7 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # FINAL SUMMARY
+        # FINAL TRADE CANDIDATES
         # ====================================================
 
         st.markdown("---")
@@ -1236,8 +1442,8 @@ if auto_scan or manual_scan:
             st.success(
                 f"🟢 LONG SIDE\n\n"
                 f"Sector: {top_gainer_sector}\n\n"
-                f"Qualified: "
-                f"{len(gainer_qualified)} stocks"
+                f"Qualified Stocks: "
+                f"{len(gainer_qualified)}"
             )
 
 
@@ -1246,8 +1452,8 @@ if auto_scan or manual_scan:
             st.error(
                 f"🔴 SHORT SIDE\n\n"
                 f"Sector: {top_loser_sector}\n\n"
-                f"Qualified: "
-                f"{len(loser_qualified)} stocks"
+                f"Qualified Stocks: "
+                f"{len(loser_qualified)}"
             )
 
 
@@ -1269,9 +1475,14 @@ if auto_scan or manual_scan:
 
 
         st.caption(
-            "Gainer = Green 9:15–9:20 candle + "
-            "Previous Close से ≤ +4% | "
-            "Loser = Red 9:15–9:20 candle + "
+            "LONG = Top Gainer Sector + "
+            "Green 9:15–9:20 candle + "
+            "Previous Close से ≤ +4%"
+        )
+
+        st.caption(
+            "SHORT = Top Loser Sector + "
+            "Red 9:15–9:20 candle + "
             "Previous Close से ≥ -4%"
         )
 
@@ -1283,8 +1494,8 @@ if auto_scan or manual_scan:
 st.markdown("---")
 
 st.caption(
-    "Suman Intraday Stock Screener V3.1 | "
-    "9:20 AM First 5-Minute Candle | "
-    "Sector Heatmap | "
-    "Top 3 Gainers / Top 3 Losers"
+    "Suman Intraday Stock Screener V3.3 PRO | "
+    "9:20 AM First 5M Candle | "
+    "Expanded Sector Universe | "
+    "Top 3 Long + Top 3 Short"
 )
