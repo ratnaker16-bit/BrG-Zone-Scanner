@@ -2,46 +2,28 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import pytz
 
 # ============================================================
-# SUMAN INTRADAY STOCK SCREENER V3.0
+# SUMAN INTRADAY STOCK SCREENER V3.1
 # ============================================================
-# 9:20 AM FIRST 5-MINUTE CANDLE SECTOR SCANNER
+# 9:20 AM FIRST 5-MINUTE CANDLE SCANNER
 #
 # LOGIC:
 #
-# 1. Sector Heatmap
-#    Previous Trading Day Close -> Current Market Price
+# TOP GAINER SECTOR
+#   1. Sector Heatmap से सबसे मजबूत sector
+#   2. 9:15-9:20 candle GREEN
+#   3. Previous Day Close से +4% से ज्यादा नहीं
+#   4. 5M strength के आधार पर Top 3
 #
-# 2. TOP GAINER SECTOR
-#    - First 5M candle = GREEN
-#    - 9:15 Open -> 9:20 Close
-#    - Previous Close से +4% से अधिक नहीं
-#    - Top 3 strongest stocks
+# TOP LOSER SECTOR
+#   1. Sector Heatmap से सबसे कमजोर sector
+#   2. 9:15-9:20 candle RED
+#   3. Previous Day Close से -4% से ज्यादा नहीं
+#   4. 5M weakness के आधार पर Top 3
 #
-# 3. TOP LOSER SECTOR
-#    - First 5M candle = RED
-#    - 9:15 Open -> 9:20 Close
-#    - Previous Close से -4% से अधिक नहीं
-#    - Top 3 weakest stocks
-#
-# INDICATORS:
-# LTP
-# Daily % Change
-# First 5M Open
-# First 5M Close
-# First 5M %
-# VWAP
-# EMA20
-# RSI(9)
-# Volume
-# Volume Ratio
-# Signal
-#
-# NO SUPPLY / DEMAND ZONES
-# NO BOXES
 # ============================================================
 
 
@@ -50,16 +32,16 @@ import pytz
 # ============================================================
 
 st.set_page_config(
-    page_title="Suman Intraday Screener V3.0",
+    page_title="Suman Intraday Screener V3.1",
     page_icon="📊",
     layout="wide"
 )
 
-st.title("📊 Suman Intraday Stock Screener V3.0")
+st.title("📊 Suman Intraday Stock Screener V3.1")
 
 st.caption(
-    "Sector Heatmap → Top Gainer / Loser Sector → "
-    "First 5-Minute Candle → Top 3 Stocks"
+    "Sector Heatmap → First 5M Candle → "
+    "Top 3 Gainers / Top 3 Losers"
 )
 
 
@@ -72,16 +54,12 @@ INDIA_TZ = pytz.timezone("Asia/Kolkata")
 now = datetime.now(INDIA_TZ)
 
 current_time = now.strftime("%H:%M:%S")
-
 market_date = now.strftime("%d-%m-%Y")
 
 
 # ============================================================
 # SCAN TIME
 # ============================================================
-
-# First 5-minute candle is 9:15 - 9:20.
-# Therefore scanner starts after 9:20.
 
 SCAN_HOUR = 9
 SCAN_MINUTE = 20
@@ -194,7 +172,7 @@ SECTORS = {
 
 
 # ============================================================
-# RSI FUNCTION
+# RSI
 # ============================================================
 
 def calculate_rsi(series, period=9):
@@ -222,59 +200,66 @@ def calculate_rsi(series, period=9):
         np.nan
     )
 
-    rsi = 100 - (
+    return 100 - (
         100 / (1 + rs)
     )
 
-    return rsi
+
+# ============================================================
+# CLEAN YFINANCE COLUMNS
+# ============================================================
+
+def clean_columns(data):
+
+    if isinstance(
+        data.columns,
+        pd.MultiIndex
+    ):
+
+        data.columns = (
+            data.columns
+            .get_level_values(0)
+        )
+
+    return data
 
 
 # ============================================================
-# GET PREVIOUS DAY CLOSE
+# GET PREVIOUS TRADING DAY CLOSE
 # ============================================================
 
 def get_previous_close(symbol):
 
     try:
 
-        daily_data = yf.download(
+        daily = yf.download(
             symbol,
-            period="10d",
+            period="15d",
             interval="1d",
             progress=False,
             auto_adjust=False,
             threads=False
         )
 
-        if (
-            daily_data is None
-            or daily_data.empty
-        ):
+        if daily is None or daily.empty:
             return None
 
-        if isinstance(
-            daily_data.columns,
-            pd.MultiIndex
-        ):
+        daily = clean_columns(daily)
 
-            daily_data.columns = (
-                daily_data.columns
-                .get_level_values(0)
-            )
-
-        if "Close" not in daily_data.columns:
+        if "Close" not in daily.columns:
             return None
 
-        daily_close = (
-            daily_data["Close"]
+        closes = (
+            daily["Close"]
             .dropna()
         )
 
-        if len(daily_close) < 2:
+        if len(closes) < 2:
             return None
 
+        # Latest completed daily candle
         previous_close = float(
-            daily_close.iloc[-2]
+            closes.iloc[-2]
         )
 
         if previous_close <= 0:
@@ -288,16 +273,87 @@ def get_previous_close(symbol):
 
 
 # ============================================================
-# STOCK ANALYSIS
+# NORMALIZE INTRADAY INDEX TO INDIA TIME
+# ============================================================
+
+def normalize_index(data):
+
+    try:
+
+        if data.index.tz is None:
+
+            data.index = data.index.tz_localize(
+                "UTC"
+            )
+
+        data.index = data.index.tz_convert(
+            INDIA_TZ
+        )
+
+    except Exception:
+
+        pass
+
+    return data
+
+
+# ============================================================
+# FIND FIRST 5-MINUTE CANDLE
+# ============================================================
+
+def get_first_5m_candle(data):
+
+    try:
+
+        data = normalize_index(data)
+
+        # Today's date
+        today = now.date()
+
+        today_data = data[
+            data.index.date == today
+        ].copy()
+
+        if today_data.empty:
+            return None
+
+        # Market open window
+        first_window = today_data[
+            (
+                today_data.index.time >=
+                dt_time(9, 15)
+            )
+            &
+            (
+                today_data.index.time <
+                dt_time(9, 20)
+            )
+        ]
+
+        if first_window.empty:
+            return None
+
+        # First available 5-minute bar
+        candle = first_window.iloc[0]
+
+        return candle
+
+    except Exception:
+
+        return None
+
+
+# ============================================================
+# ANALYZE STOCK
 # ============================================================
 
 def analyze_stock(symbol):
 
     try:
 
-        # ====================================================
-        # 5 MINUTE DATA
-        # ====================================================
+        # ----------------------------------------------------
+        # DOWNLOAD 5 MIN DATA
+        # ----------------------------------------------------
 
         data = yf.download(
             symbol,
@@ -308,25 +364,10 @@ def analyze_stock(symbol):
             threads=False
         )
 
-        if (
-            data is None
-            or data.empty
-        ):
+        if data is None or data.empty:
             return None
 
-        # ----------------------------------------------------
-        # REMOVE MULTI INDEX
-        # ----------------------------------------------------
-
-        if isinstance(
-            data.columns,
-            pd.MultiIndex
-        ):
-
-            data.columns = (
-                data.columns
-                .get_level_values(0)
-            )
+        data = clean_columns(data)
 
         required = [
             "Open",
@@ -336,20 +377,21 @@ def analyze_stock(symbol):
             "Volume"
         ]
 
-        for col in required:
-
-            if col not in data.columns:
-                return None
+        if not all(
+            col in data.columns
+            for col in required
+        ):
+            return None
 
         data = data.dropna()
 
-        if len(data) < 25:
+        if len(data) < 20:
             return None
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # PREVIOUS DAY CLOSE
-        # ====================================================
+        # ----------------------------------------------------
 
         previous_close = get_previous_close(
             symbol
@@ -359,80 +401,36 @@ def analyze_stock(symbol):
             return None
 
 
-        # ====================================================
-        # FIND TODAY'S DATA
-        # ====================================================
-
-        today_date = now.date()
-
-
-        today_data = data[
-            data.index.date == today_date
-        ].copy()
-
-
-        if today_data.empty:
-            return None
-
-
-        # ====================================================
+        # ----------------------------------------------------
         # FIRST 5 MINUTE CANDLE
-        # ====================================================
+        # ----------------------------------------------------
 
-        # We need the 9:15 candle.
-        # Depending on yfinance timestamp timezone,
-        # use local time conversion where required.
+        first_candle = get_first_5m_candle(
+            data
+        )
 
-        if today_data.index.tz is not None:
-
-            try:
-
-                today_data.index = (
-                    today_data.index
-                    .tz_convert(INDIA_TZ)
-                )
-
-            except Exception:
-
-                pass
-
-
-        first_candle = today_data[
-            (
-                today_data.index.hour == 9
-            )
-            &
-            (
-                today_data.index.minute == 15
-            )
-        ]
-
-
-        if first_candle.empty:
+        if first_candle is None:
             return None
-
-
-        first_bar = first_candle.iloc[0]
 
 
         first_open = float(
-            first_bar["Open"]
+            first_candle["Open"]
         )
 
         first_high = float(
-            first_bar["High"]
+            first_candle["High"]
         )
 
         first_low = float(
-            first_bar["Low"]
+            first_candle["Low"]
         )
 
         first_close = float(
-            first_bar["Close"]
+            first_candle["Close"]
         )
 
         first_volume = float(
-            first_bar["Volume"]
+            first_candle["Volume"]
         )
 
 
@@ -440,21 +438,23 @@ def analyze_stock(symbol):
             return None
 
 
-        # ====================================================
-        # FIRST 5 MINUTE CANDLE %
-        # ====================================================
+        # ----------------------------------------------------
+        # FIRST 5M CHANGE
+        # ----------------------------------------------------
 
         first_5m_change = (
             (
-                first_close - first_open
+                first_close -
+                first_open
             )
-            / first_open
+            /
+            first_open
         ) * 100
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # CANDLE TYPE
-        # ====================================================
+        # ----------------------------------------------------
 
         if first_close > first_open:
 
@@ -469,54 +469,54 @@ def analyze_stock(symbol):
             candle_type = "⚪ DOJI"
 
 
-        # ====================================================
+        # ----------------------------------------------------
+        # DAILY CHANGE
+        # Previous Close -> First 5M Close
+        #
+        # IMPORTANT:
+        # For the 9:20 decision, use 5M close
+        # instead of later LTP.
+        # ----------------------------------------------------
+
+        first_5m_daily_change = (
+            (
+                first_close -
+                previous_close
+            )
+            /
+            previous_close
+        ) * 100
+
+
+        # ----------------------------------------------------
         # CURRENT LTP
-        # ====================================================
+        # ----------------------------------------------------
 
         ltp = float(
             data["Close"].iloc[-1]
         )
 
 
-        # ====================================================
-        # DAILY % CHANGE
-        # ====================================================
-
-        daily_change = (
-            (
-                ltp - previous_close
-            )
-            / previous_close
-        ) * 100
-
-
-        # ====================================================
+        # ----------------------------------------------------
         # VWAP
-        # ====================================================
+        # ----------------------------------------------------
 
         high = data["High"]
-
         low = data["Low"]
-
         close = data["Close"]
-
         volume = data["Volume"]
-
 
         typical_price = (
             high + low + close
         ) / 3
 
-
         cumulative_volume = (
             volume.cumsum()
         )
 
-
         cumulative_pv = (
             typical_price * volume
         ).cumsum()
-
 
         vwap_series = (
             cumulative_pv
@@ -527,15 +527,14 @@ def analyze_stock(symbol):
             )
         )
 
-
         vwap = float(
             vwap_series.iloc[-1]
         )
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # EMA20
-        # ====================================================
+        # ----------------------------------------------------
 
         ema20 = float(
             close.ewm(
@@ -545,9 +544,9 @@ def analyze_stock(symbol):
         )
 
 
-        # ====================================================
-        # RSI 9
-        # ====================================================
+        # ----------------------------------------------------
+        # RSI9
+        # ----------------------------------------------------
 
         rsi_series = calculate_rsi(
             close,
@@ -559,18 +558,14 @@ def analyze_stock(symbol):
         )
 
 
-        # ====================================================
-        # CURRENT VOLUME
-        # ====================================================
+        # ----------------------------------------------------
+        # VOLUME
+        # ----------------------------------------------------
 
         current_volume = float(
             volume.iloc[-1]
         )
 
-
-        # ====================================================
-        # VOLUME RATIO
-        # ====================================================
 
         if len(volume) >= 21:
 
@@ -588,8 +583,7 @@ def analyze_stock(symbol):
         if avg_volume > 0:
 
             volume_ratio = (
-                current_volume
-                /
+                current_volume /
                 avg_volume
             )
 
@@ -598,9 +592,9 @@ def analyze_stock(symbol):
             volume_ratio = 0
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # VWAP STATUS
-        # ====================================================
+        # ----------------------------------------------------
 
         if ltp > vwap:
 
@@ -615,9 +609,9 @@ def analyze_stock(symbol):
             vwap_status = "At VWAP"
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # SIGNAL
-        # ====================================================
+        # ----------------------------------------------------
 
         if (
             ltp > vwap
@@ -644,9 +638,9 @@ def analyze_stock(symbol):
             signal = "⚪ WAIT"
 
 
-        # ====================================================
+        # ----------------------------------------------------
         # RESULT
-        # ====================================================
+        # ----------------------------------------------------
 
         return {
 
@@ -656,27 +650,27 @@ def analyze_stock(symbol):
                     ""
                 ),
 
-            "LTP":
-                round(
-                    ltp,
-                    2
-                ),
-
             "Prev Close":
                 round(
                     previous_close,
                     2
                 ),
 
-            "Daily %":
-                round(
-                    daily_change,
-                    2
-                ),
-
             "5M Open":
                 round(
                     first_open,
+                    2
+                ),
+
+            "5M High":
+                round(
+                    first_high,
+                    2
+                ),
+
+            "5M Low":
+                round(
+                    first_low,
                     2
                 ),
 
@@ -692,12 +686,24 @@ def analyze_stock(symbol):
                     2
                 ),
 
+            "Prev Close %":
+                round(
+                    first_5m_daily_change,
+                    2
+                ),
+
             "5M Candle":
                 candle_type,
 
             "5M Volume":
                 int(
                     first_volume
+                ),
+
+            "LTP":
+                round(
+                    ltp,
+                    2
                 ),
 
             "VWAP":
@@ -736,14 +742,13 @@ def analyze_stock(symbol):
                 signal
         }
 
-
     except Exception:
 
         return None
 
 
 # ============================================================
-# MAIN SCANNER
+# RUN SCANNER
 # ============================================================
 
 def run_scanner():
@@ -765,10 +770,10 @@ def run_scanner():
         results = []
 
 
-        for stock in stocks:
+        for symbol in stocks:
 
             result = analyze_stock(
-                stock
+                symbol
             )
 
             scanned += 1
@@ -793,18 +798,17 @@ def run_scanner():
 
         if results:
 
-            stock_df = pd.DataFrame(
+            df = pd.DataFrame(
                 results
             )
 
 
-            # =================================================
-            # SECTOR DAILY PERFORMANCE
-            # =================================================
+            # Sector heatmap based on
+            # previous close -> first 5M close
 
             sector_change = float(
-                stock_df[
-                    "Daily %"
+                df[
+                    "Prev Close %"
                 ].mean()
             )
 
@@ -817,7 +821,7 @@ def run_scanner():
                     sector_change,
 
                 "stocks":
-                    stock_df
+                    df
             }
 
 
@@ -837,7 +841,7 @@ st.info(
 
 
 # ============================================================
-# MARKET STATUS
+# BEFORE 9:20
 # ============================================================
 
 if not is_scan_time():
@@ -847,9 +851,8 @@ if not is_scan_time():
     )
 
     st.write(
-        "पहली 5-minute candle "
-        "9:15–9:20 पूरी होने के बाद "
-        "SCAN NOW दबाएँ।"
+        "9:15–9:20 की पहली 5-minute candle "
+        "पूरी होने के बाद SCAN NOW दबाएँ।"
     )
 
 
@@ -862,16 +865,15 @@ auto_scan = False
 
 if is_scan_time():
 
+    today_string = now.strftime(
+        "%Y-%m-%d"
+    )
+
     last_scan_date = (
         st.session_state.get(
             "last_scan_date",
             None
         )
-    )
-
-
-    today_string = now.strftime(
-        "%Y-%m-%d"
     )
 
 
@@ -897,7 +899,7 @@ manual_scan = st.button(
 if auto_scan or manual_scan:
 
     with st.spinner(
-        "📊 Scanning sectors and first 5-minute candles..."
+        "📊 Scanning F&O sectors and first 5-minute candles..."
     ):
 
         sector_data = run_scanner()
@@ -912,11 +914,19 @@ if auto_scan or manual_scan:
         )
 
 
+    # ========================================================
+    # NO DATA
+    # ========================================================
+
     if not sector_data:
 
         st.error(
-            "❌ Market data उपलब्ध नहीं है। "
-            "थोड़ी देर बाद फिर Scan करें।"
+            "❌ आज की 5-minute market data उपलब्ध नहीं है।"
+        )
+
+        st.info(
+            "अगर market खुला है तो कुछ सेकंड बाद "
+            "SCAN NOW फिर दबाएँ।"
         )
 
 
@@ -936,7 +946,7 @@ if auto_scan or manual_scan:
                 "Sector":
                     sector,
 
-                "% Change":
+                "Change %":
                     round(
                         info["change"],
                         2
@@ -952,7 +962,7 @@ if auto_scan or manual_scan:
         sector_df = (
             sector_df
             .sort_values(
-                "% Change",
+                "Change %",
                 ascending=False
             )
             .reset_index(
@@ -970,7 +980,7 @@ if auto_scan or manual_scan:
         )
 
         top_gainer_change = (
-            sector_df.iloc[0]["% Change"]
+            sector_df.iloc[0]["Change %"]
         )
 
 
@@ -983,7 +993,7 @@ if auto_scan or manual_scan:
         )
 
         top_loser_change = (
-            sector_df.iloc[-1]["% Change"]
+            sector_df.iloc[-1]["Change %"]
         )
 
 
@@ -1004,7 +1014,7 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # TOP GAINER SECTOR
+        # GAINER SECTOR
         # ====================================================
 
         st.subheader(
@@ -1026,8 +1036,8 @@ if auto_scan or manual_scan:
         # GAINER FILTER
         # ====================================================
         #
-        # GREEN FIRST 5M CANDLE
-        # AND DAILY CHANGE <= +4%
+        # GREEN FIRST 5M
+        # PREVIOUS CLOSE CHANGE <= +4%
         #
         # ====================================================
 
@@ -1040,17 +1050,14 @@ if auto_scan or manual_scan:
             &
             (
                 gainer_all[
-                    "Daily %"
+                    "Prev Close %"
                 ] <= 4
             )
         ].copy()
 
 
         # ====================================================
-        # RANK GAINERS
-        # ====================================================
-        #
-        # Strongest first 5M candle
+        # GAINER RANKING
         # ====================================================
 
         gainer_qualified = (
@@ -1058,7 +1065,7 @@ if auto_scan or manual_scan:
             .sort_values(
                 [
                     "5M %",
-                    "Daily %"
+                    "Prev Close %"
                 ],
                 ascending=False
             )
@@ -1070,16 +1077,16 @@ if auto_scan or manual_scan:
 
 
         st.markdown(
-            "### 🟢 Top 3 Gainer Stocks"
+            "### 🟢 TOP 3 GAINER STOCKS"
         )
 
 
         if gainer_qualified.empty:
 
             st.warning(
-                "इस sector में कोई stock "
-                "आपकी Green Candle + 4% condition "
-                "को पूरा नहीं करता।"
+                "इस Top Gainer Sector में "
+                "Green + ≤4% condition वाला "
+                "कोई stock नहीं मिला।"
             )
 
         else:
@@ -1090,11 +1097,12 @@ if auto_scan or manual_scan:
                         "Symbol",
                         "Prev Close",
                         "5M Open",
+                        "5M High",
+                        "5M Low",
                         "5M Close",
                         "5M %",
-                        "Daily %",
+                        "Prev Close %",
                         "5M Volume",
-                        "LTP",
                         "VWAP",
                         "EMA20",
                         "RSI(9)",
@@ -1108,7 +1116,7 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # TOP LOSER SECTOR
+        # LOSER SECTOR
         # ====================================================
 
         st.subheader(
@@ -1130,8 +1138,8 @@ if auto_scan or manual_scan:
         # LOSER FILTER
         # ====================================================
         #
-        # RED FIRST 5M CANDLE
-        # AND DAILY CHANGE >= -4%
+        # RED FIRST 5M
+        # PREVIOUS CLOSE CHANGE >= -4%
         #
         # ====================================================
 
@@ -1144,17 +1152,14 @@ if auto_scan or manual_scan:
             &
             (
                 loser_all[
-                    "Daily %"
+                    "Prev Close %"
                 ] >= -4
             )
         ].copy()
 
 
         # ====================================================
-        # RANK LOSERS
-        # ====================================================
-        #
-        # Weakest first 5M candle
+        # LOSER RANKING
         # ====================================================
 
         loser_qualified = (
@@ -1162,7 +1167,7 @@ if auto_scan or manual_scan:
             .sort_values(
                 [
                     "5M %",
-                    "Daily %"
+                    "Prev Close %"
                 ],
                 ascending=True
             )
@@ -1174,16 +1179,16 @@ if auto_scan or manual_scan:
 
 
         st.markdown(
-            "### 🔴 Top 3 Loser Stocks"
+            "### 🔴 TOP 3 LOSER STOCKS"
         )
 
 
         if loser_qualified.empty:
 
             st.warning(
-                "इस sector में कोई stock "
-                "आपकी Red Candle + 4% condition "
-                "को पूरा नहीं करता।"
+                "इस Top Loser Sector में "
+                "Red + ≤4% fall condition वाला "
+                "कोई stock नहीं मिला।"
             )
 
         else:
@@ -1194,11 +1199,12 @@ if auto_scan or manual_scan:
                         "Symbol",
                         "Prev Close",
                         "5M Open",
+                        "5M High",
+                        "5M Low",
                         "5M Close",
                         "5M %",
-                        "Daily %",
+                        "Prev Close %",
                         "5M Volume",
-                        "LTP",
                         "VWAP",
                         "EMA20",
                         "RSI(9)",
@@ -1212,13 +1218,13 @@ if auto_scan or manual_scan:
 
 
         # ====================================================
-        # FINAL TRADE SUMMARY
+        # FINAL SUMMARY
         # ====================================================
 
         st.markdown("---")
 
         st.subheader(
-            "🎯 9:20 AM Trade Candidates"
+            "🎯 9:20 AM TRADE CANDIDATES"
         )
 
 
@@ -1230,8 +1236,8 @@ if auto_scan or manual_scan:
             st.success(
                 f"🟢 LONG SIDE\n\n"
                 f"Sector: {top_gainer_sector}\n\n"
-                f"Qualified Stocks: "
-                f"{len(gainer_qualified)}"
+                f"Qualified: "
+                f"{len(gainer_qualified)} stocks"
             )
 
 
@@ -1240,8 +1246,8 @@ if auto_scan or manual_scan:
             st.error(
                 f"🔴 SHORT SIDE\n\n"
                 f"Sector: {top_loser_sector}\n\n"
-                f"Qualified Stocks: "
-                f"{len(loser_qualified)}"
+                f"Qualified: "
+                f"{len(loser_qualified)} stocks"
             )
 
 
@@ -1263,10 +1269,10 @@ if auto_scan or manual_scan:
 
 
         st.caption(
-            "Gainer Filter = First 5M Green + "
-            "Previous Close से +4% से अधिक नहीं | "
-            "Loser Filter = First 5M Red + "
-            "Previous Close से -4% से अधिक नहीं"
+            "Gainer = Green 9:15–9:20 candle + "
+            "Previous Close से ≤ +4% | "
+            "Loser = Red 9:15–9:20 candle + "
+            "Previous Close से ≥ -4%"
         )
 
 
@@ -1277,8 +1283,8 @@ if auto_scan or manual_scan:
 st.markdown("---")
 
 st.caption(
-    "Suman Intraday Stock Screener V3.0 | "
-    "9:20 AM First 5-Minute Candle Scanner | "
+    "Suman Intraday Stock Screener V3.1 | "
+    "9:20 AM First 5-Minute Candle | "
     "Sector Heatmap | "
     "Top 3 Gainers / Top 3 Losers"
 )
