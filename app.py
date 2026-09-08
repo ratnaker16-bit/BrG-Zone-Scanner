@@ -1,712 +1,960 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import yfinance as yf
-from datetime import datetime, time as dt_time
+from datetime import datetime
 import pytz
+import time
 
-# ============================================================
-# SUMAN INTRADAY SCREENER
-# 9:19 AM TOP GAINER / TOP LOSER SECTOR
-# ============================================================
+
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
 st.set_page_config(
-    page_title="Suman 9:19 Intraday Screener",
+    page_title="Suman NIFTY 500 VWAP Scanner",
+    page_icon="📊",
     layout="wide"
 )
 
-# ============================================================
-# SETTINGS
-# ============================================================
+
+# =========================================================
+# NIFTY 500 — EMBEDDED 500 STOCK UNIVERSE
+# =========================================================
+
+NIFTY_500_STOCKS = """
+360ONE 3MINDIA ABB ACC ACMESOLAR AIAENG APLAPOLLO AUBANK AWL
+AADHARHFC AARTIIND AAVAS ABBOTINDIA ACE ACUTAAS ADANIENSOL ADANIENT
+ADANIGREEN ADANIPORTS ADANIPOWER ATGL ABCAPITAL ABFRL ABLBL ABREL
+ABSLAMC CPPLUS AEGISLOG AEGISVOPAK AFCONS AFFLE AJANTPHARM ALKEM
+ABDL ARE&M AMBER AMBUJACEM ANANDRATHI ANANTRAJ ANGELONE ANTHEM
+ANURAS APARINDS APOLLOHOSP APOLLOTYRE APTUS ASAHIINDIA ASHOKLEY
+ASIANPAINT ASTERDM ASTRAL ATHERENERG ATUL AUROPHARMA AIIL DMART
+AXISBANK BEML BLS BSE BAJAJ-AUTO BAJFINANCE BAJAJFINSV BAJAJHLDNG
+BAJAJHFL BALKRISIND BALRAMCHIN BANDHANBNK BANKBARODA BANKINDIA
+MAHABANK BATAINDIA BAYERCROP BELRISE BERGEPAINT BDL BEL BHARATFORG
+BHEL BPCL BHARTIARTL BHARTIHEXA BIKAJI GROWW BIOCON BSOFT BLUEDART
+BLUEJET BLUESTARCO BBTC BOSCHLTD FIRSTCRY BRIGADE BRITANNIA MAPMYINDIA
+CCL CESC CGPOWER CIEINDIA CRISIL CANFINHOME CANBK CANHLIFE CAPLIPOINT
+CGCL CARBORUNIV CARTRADE CASTROLIND CEATLTD CEMPRO CENTRALBK CDSL
+CHALET CHAMBLFERT CHENNPETRO CHOICEIN CHOLAHLDNG CHOLAFIN CIPLA CUB
+CLEAN COALINDIA COCHINSHIP COFORGE COHANCE COLPAL CAMS CONCORDBIO
+CONCOR COROMANDEL CRAFTSMAN CREDITACC CROMPTON CUMMINSIND CYIENT
+DCMSHRIRAM DLF DOMS DABUR DALBHARAT DATAPATTNS DEEPAKFERT DEEPAKNTR
+DELHIVERY DEVYANI DIVISLAB DIXON LALPATHLAB DRREDDY EIDPARRY EIHOTEL
+EICHERMOT ELECON ELGIEQUIP EMAMILTD EMCURE EMMVEE ENDURANCE ENGINERSIN
+ERIS ESCORTS ETERNAL EXIDEIND NYKAA FEDERALBNK FACT FINCABLES FSL
+FIVESTAR FORCEMOT FORTIS GAIL GVT&D GMRAIRPORT GABRIEL GALLANTT GRSE
+GICRE GILLETTE GLAND GLAXO GLENMARK MEDANTA GODIGIT GPIL GODFRYPHLP
+GODREJCP GODREJIND GODREJPROP GRANULES GRAPHITE GRASIM GRAVITA GESHIP
+FLUOROCHEM GMDCLTD HEG HBLENGINE HCLTECH HDBFS HDFCAMC HDFCBANK
+HDFCLIFE HFCL HAVELLS HEROMOTOCO HEXT HSCL HINDALCO HAL HINDCOPPER
+HINDPETRO HINDUNILVR HINDZINC POWERINDIA HOMEFIRST HONASA HONAUT HUDCO
+HYUNDAI ICICIBANK ICICIGI ICICIAMC ICICIPRULI IDBI IDFCFIRSTB IFCI
+IIFL IRB IRCON ITCHOTELS ITC ITI INDGN INDIACEM INDIAMART INDIANB
+IEX INDHOTEL IOC IOB IRCTC IRFC IREDA IGL INDUSTOWER INDUSINDBK
+NAUKRI INFY INOXWIND INTELLECT INDIGO IGIL IKS IPCALAB JKCEMENT JBMA
+JKTYRE JMFINANCIL JSWCEMENT JSWDULUX JSWENERGY JSWINFRA JSWSTEEL
+JAINREC JPPOWER J&KBANK JINDALSAW JSL JINDALSTEL JIOFIN JUBLFOOD
+JUBLINGREA JUBLPHARMA JWL JYOTICNC KPRMILL KEI KPITTECH KAJARIACER
+KPIL KALYANKJIL KARURVYSYA KAYNES KEC KFINTECH KIRLOSENG KOTAKBANK
+KIMS LTF LTTS LGEINDIA LICHSGFIN LTFOODS LTM LT LATENTVIEW LAURUSLABS
+THELEELA LEMONTREE LENSKART LICI LINDEINDIA LLOYDSME LODHA LUPIN MMTC
+MRF MGL M&MFIN M&M MANAPPURAM MRPL MANKIND MARICO MARUTI MFSL
+MAXHEALTH MAZDOCK MEESHO MINDACORP MSUMI MOTILALOFS MPHASIS MCX
+MUTHOOTFIN NATCOPHARM NBCC NCC NHPC NLCINDIA NMDC NSLNISP NTPCGREEN
+NTPC NH NATIONALUM NAVA NAVINFLUOR NESTLEIND NETWEB NEULANDLAB NEWGEN
+NAM-INDIA NIVABUPA NUVAMA NUVOCO OBEROIRLTY ONGC OIL OLAELEC OLECTRA
+PAYTM ONESOURCE OFSS POLICYBZR PCBL PGEL PIIND PNBHOUSING PTCIL
+PVRINOX PAGEIND PARADEEP PATANJALI PERSISTENT PETRONET PFIZER PHOENIXLTD
+PWL PIDILITIND PINELABS PIRAMALFIN PPLPHARMA POLYMED POLYCAB POONAWALLA
+PFC POWERGRID PREMIERENE PRESTIGE PFOCUS PNB RRKABEL RBLBANK RECLTD
+RHIM RITES RADICO RVNL RAILTEL RAINBOW RKFORGE REDINGTON RELIANCE RPOWER
+SBFC SBICARD SBILIFE SJVN SRF SAGILITY SAILIFE SAMMAANCAP MOTHERSON
+SAPPHIRE SARDAEN SAREGAMA SCHAEFFLER SCHNEIDER SCI SHREECEM SHRIRAMFIN
+SHYAMMETL ENRIN SIEMENS SIGNATURE SOBHA SOLARINDS SONACOMS SONATSOFTW
+STARHEALTH SBIN SAIL SUMICHEM SUNPHARMA SUNTV SUNDARMFIN SUPREMEIND
+SPLPETRO SUZLON SWANCORP SWIGGY SYNGENE SYRMA TBOTEK TVSMOTOR TATACAP
+TATACHEM TATACOMM TCS TATACONSUM TATAELXSI TATAINVEST TMCV TMPV TATAPOWER
+TATASTEEL TATATECH TTML TECHM TECHNOE TEGA TEJASNET TENNIND NIACL RAMCOCEM
+THERMAX TIMKEN TITAGARH TITAN TORNTPHARM TORNTPOWER TARIL TRAVELFOOD
+TRENT TRIDENT TRITURBINE TIINDIA UCOBANK UNOMINDA UPL UTIAMC ULTRACEMCO
+UNIONBANK UBL UNITDSPR URBANCO USHAMART VTL VBL VEDL VIJAYA VMM IDEA
+VOLTAS WAAREEENER WELCORP WELSPUNLIV WHIRLPOOL WIPRO WOCKPHARMA YESBANK
+ZFCVINDIA ZEEL ZENTEC ZENSARTECH ZYDUSLIFE ZYDUSWELL ECLERX
+""".split()
+
+
+# =========================================================
+# VALIDATION
+# =========================================================
+
+NIFTY_500_STOCKS = list(dict.fromkeys(NIFTY_500_STOCKS))
+
+if len(NIFTY_500_STOCKS) != 500:
+    st.error(
+        f"❌ Stock Universe Error: "
+        f"{len(NIFTY_500_STOCKS)} stocks loaded. "
+        f"Expected exactly 500."
+    )
+    st.stop()
+
+
+# =========================================================
+# YAHOO FINANCE SYMBOLS
+# =========================================================
+
+YF_TICKERS = [
+    f"{symbol}.NS"
+    for symbol in NIFTY_500_STOCKS
+]
+
+
+# =========================================================
+# TIMEZONE
+# =========================================================
 
 IST = pytz.timezone("Asia/Kolkata")
 
-SCAN_TIME = dt_time(9, 19)
 
-MAX_GAIN = 4.0
-MAX_LOSS = -4.0
+# =========================================================
+# HEADER
+# =========================================================
 
-# ============================================================
-# NSE STOCKS + SECTORS
-# ============================================================
+st.title("📊 SUMAN NIFTY 500 VWAP SCANNER")
 
-SECTOR_STOCKS = {
+st.markdown(
+    """
+    ### 5M + 15M VWAP CROSS SCANNER
 
-    "BANKING": [
-        "HDFCBANK.NS",
-        "ICICIBANK.NS",
-        "SBIN.NS",
-        "AXISBANK.NS",
-        "KOTAKBANK.NS",
-        "INDUSINDBK.NS",
-        "BANKBARODA.NS",
-        "PNB.NS",
-        "IDFCFIRSTB.NS",
-        "FEDERALBNK.NS"
-    ],
+    🟢 **STRONG BUY** = 5M BUY + 15M BUY  
+    🔴 **STRONG SELL** = 5M SELL + 15M SELL  
+    🟢 **BUY** = VWAP Bullish Cross  
+    🔴 **SELL** = VWAP Bearish Cross
+    """
+)
 
-    "IT": [
-        "TCS.NS",
-        "INFY.NS",
-        "HCLTECH.NS",
-        "WIPRO.NS",
-        "TECHM.NS",
-        "LTIM.NS",
-        "MPHASIS.NS",
-        "COFORGE.NS",
-        "PERSISTENT.NS"
-    ],
 
-    "AUTO": [
-        "MARUTI.NS",
-        "M&M.NS",
-        "TATAMOTORS.NS",
-        "EICHERMOT.NS",
-        "HEROMOTOCO.NS",
-        "BAJAJ-AUTO.NS",
-        "TVSMOTOR.NS",
-        "ASHOKLEY.NS"
-    ],
+# =========================================================
+# SIDEBAR
+# =========================================================
 
-    "PHARMA": [
-        "SUNPHARMA.NS",
-        "DRREDDY.NS",
-        "CIPLA.NS",
-        "DIVISLAB.NS",
-        "APOLLOHOSP.NS",
-        "LUPIN.NS",
-        "AUROPHARMA.NS",
-        "BIOCON.NS"
-    ],
+st.sidebar.header("⚙️ Scanner Settings")
 
-    "METAL": [
-        "TATASTEEL.NS",
-        "JSWSTEEL.NS",
-        "HINDALCO.NS",
-        "VEDL.NS",
-        "JINDALSTEL.NS",
-        "SAIL.NS",
-        "NMDC.NS"
-    ],
+st.sidebar.success(
+    f"✅ NIFTY 500: {len(NIFTY_500_STOCKS)} Stocks"
+)
 
-    "ENERGY": [
-        "RELIANCE.NS",
-        "ONGC.NS",
-        "NTPC.NS",
-        "POWERGRID.NS",
-        "COALINDIA.NS",
-        "IOC.NS",
-        "BPCL.NS",
-        "GAIL.NS"
-    ],
+st.sidebar.info("5 Minute: ON")
+st.sidebar.info("15 Minute: ON")
+st.sidebar.info("1 Hour: OFF")
 
-    "FMCG": [
-        "ITC.NS",
-        "HINDUNILVR.NS",
-        "NESTLEIND.NS",
-        "BRITANNIA.NS",
-        "TATACONSUM.NS",
-        "DABUR.NS",
-        "MARICO.NS",
-        "GODREJCP.NS"
-    ],
+show_all = st.sidebar.checkbox(
+    "Show Complete 500 Stock List",
+    value=False
+)
 
-    "REALTY": [
-        "DLF.NS",
-        "LODHA.NS",
-        "GODREJPROP.NS",
-        "OBEROIRLTY.NS",
-        "PRESTIGE.NS"
-    ],
 
-    "FINANCE": [
-        "BAJFINANCE.NS",
-        "BAJAJFINSV.NS",
-        "SHRIRAMFIN.NS",
-        "CHOLAFIN.NS",
-        "MUTHOOTFIN.NS",
-        "LICHSGFIN.NS",
-        "RECLTD.NS",
-        "PFC.NS"
-    ],
+# =========================================================
+# COMPLETE STOCK LIST
+# =========================================================
 
-    "INFRA": [
-        "LT.NS",
-        "ADANIPORTS.NS",
-        "ADANIENT.NS",
-        "BEL.NS",
-        "HAL.NS",
-        "SIEMENS.NS",
-        "ABB.NS",
-        "BHEL.NS"
-    ],
+if show_all:
 
-    "TELECOM": [
-        "BHARTIARTL.NS",
-        "INDUSTOWER.NS"
-    ],
+    st.subheader(
+        f"📋 COMPLETE NIFTY 500 STOCK LIST — "
+        f"{len(NIFTY_500_STOCKS)} STOCKS"
+    )
 
-    "CEMENT": [
-        "ULTRACEMCO.NS",
-        "GRASIM.NS",
-        "AMBUJACEM.NS",
-        "ACC.NS",
-        "DALBHARAT.NS",
-        "SHREECEM.NS"
-    ],
+    stock_df = pd.DataFrame(
+        {
+            "No.": range(
+                1,
+                len(NIFTY_500_STOCKS) + 1
+            ),
+            "Symbol": NIFTY_500_STOCKS
+        }
+    )
 
-    "CHEMICALS": [
-        "SRF.NS",
-        "PIDILITIND.NS",
-        "UPL.NS",
-        "DEEPAKNTR.NS",
-        "PIIND.NS"
+    st.dataframe(
+        stock_df,
+        use_container_width=True,
+        hide_index=True,
+        height=600
+    )
+
+
+# =========================================================
+# VWAP
+# =========================================================
+
+def calculate_vwap(df):
+
+    df = df.copy()
+
+    typical_price = (
+        df["High"]
+        + df["Low"]
+        + df["Close"]
+    ) / 3
+
+    volume = (
+        pd.to_numeric(
+            df["Volume"],
+            errors="coerce"
+        )
+        .fillna(0)
+    )
+
+    cumulative_pv = (
+        typical_price * volume
+    ).cumsum()
+
+    cumulative_volume = (
+        volume.cumsum()
+    )
+
+    df["VWAP"] = np.where(
+        cumulative_volume > 0,
+        cumulative_pv /
+        cumulative_volume,
+        np.nan
+    )
+
+    return df
+
+
+# =========================================================
+# PREPARE DATA
+# =========================================================
+
+def prepare_data(df):
+
+    if df is None or df.empty:
+        return None
+
+    df = df.copy()
+
+    required = [
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Volume"
     ]
-}
 
-# ============================================================
-# STOCK → SECTOR
-# ============================================================
+    if not all(
+        col in df.columns
+        for col in required
+    ):
+        return None
 
-STOCK_SECTOR = {}
+    df = df.dropna(
+        subset=["Close"]
+    )
 
-for sector, stocks in SECTOR_STOCKS.items():
-    for stock in stocks:
-        STOCK_SECTOR[stock] = sector
+    if df.empty:
+        return None
 
-ALL_STOCKS = list(STOCK_SECTOR.keys())
+    for col in required:
+
+        df[col] = pd.to_numeric(
+            df[col],
+            errors="coerce"
+        )
+
+    df["Volume"] = (
+        df["Volume"]
+        .fillna(0)
+    )
+
+    # -----------------------------------------------------
+    # TIMEZONE
+    # -----------------------------------------------------
+
+    try:
+
+        if df.index.tz is None:
+
+            df.index = (
+                df.index
+                .tz_localize("UTC")
+            )
+
+        df.index = (
+            df.index
+            .tz_convert("Asia/Kolkata")
+        )
+
+    except Exception:
+        pass
+
+    # -----------------------------------------------------
+    # MARKET HOURS
+    # -----------------------------------------------------
+
+    try:
+
+        df = df.between_time(
+            "09:15",
+            "15:30"
+        )
+
+    except Exception:
+        pass
+
+    if df.empty:
+        return None
+
+    # -----------------------------------------------------
+    # VWAP
+    # -----------------------------------------------------
+
+    df = calculate_vwap(df)
+
+    df = df.dropna(
+        subset=["VWAP"]
+    )
+
+    if df.empty:
+        return None
+
+    return df
 
 
-# ============================================================
-# SYMBOL
-# ============================================================
+# =========================================================
+# VWAP CROSS
+# =========================================================
 
-def clean_symbol(symbol):
-    return symbol.replace(".NS", "")
+def get_signal(df):
+
+    df = prepare_data(df)
+
+    if df is None:
+        return None
+
+    if len(df) < 2:
+        return None
+
+    prev_close = float(
+        df["Close"].iloc[-2]
+    )
+
+    curr_close = float(
+        df["Close"].iloc[-1]
+    )
+
+    prev_vwap = float(
+        df["VWAP"].iloc[-2]
+    )
+
+    curr_vwap = float(
+        df["VWAP"].iloc[-1]
+    )
+
+    signal = "WAIT"
+
+    # -----------------------------------------------------
+    # BUY CROSS
+    # -----------------------------------------------------
+
+    if (
+        prev_close <= prev_vwap
+        and
+        curr_close > curr_vwap
+    ):
+
+        signal = "BUY"
+
+    # -----------------------------------------------------
+    # SELL CROSS
+    # -----------------------------------------------------
+
+    elif (
+        prev_close >= prev_vwap
+        and
+        curr_close < curr_vwap
+    ):
+
+        signal = "SELL"
+
+    return {
+        "Signal": signal,
+        "Close": curr_close,
+        "VWAP": curr_vwap
+    }
 
 
-# ============================================================
-# GET MARKET DATA
-# ============================================================
+# =========================================================
+# DOWNLOAD DATA
+# =========================================================
 
-@st.cache_data(ttl=30, show_spinner=False)
-def get_market_data():
+@st.cache_data(ttl=60)
+def download_timeframe(
+    tickers,
+    interval
+):
 
-    results = []
+    all_data = {}
 
-    for symbol in ALL_STOCKS:
+    # -----------------------------------------------------
+    # BATCH DOWNLOAD
+    # -----------------------------------------------------
+
+    batch_size = 75
+
+    for start in range(
+        0,
+        len(tickers),
+        batch_size
+    ):
+
+        batch = tickers[
+            start:
+            start + batch_size
+        ]
 
         try:
 
-            ticker = yf.Ticker(symbol)
-
-            # ------------------------------------------------
-            # PREVIOUS DAY CLOSE
-            # ------------------------------------------------
-
-            daily = ticker.history(
-                period="5d",
-                interval="1d",
-                auto_adjust=False
-            )
-
-            if daily.empty:
-                continue
-
-            daily = daily.dropna(subset=["Close"])
-
-            if len(daily) < 2:
-                continue
-
-            previous_close = float(
-                daily["Close"].iloc[-2]
-            )
-
-            # ------------------------------------------------
-            # TODAY 5 MIN DATA
-            # ------------------------------------------------
-
-            intraday = ticker.history(
+            data = yf.download(
+                tickers=batch,
                 period="1d",
-                interval="5m",
+                interval=interval,
+                group_by="ticker",
                 auto_adjust=False,
-                prepost=False
+                prepost=False,
+                threads=True,
+                progress=False
             )
 
-            if intraday.empty:
-                continue
+            if data is not None and not data.empty:
 
-            intraday.index = pd.to_datetime(
-                intraday.index
-            )
+                if isinstance(
+                    data.columns,
+                    pd.MultiIndex
+                ):
 
-            # Convert to IST
-            if intraday.index.tz is not None:
-                intraday.index = intraday.index.tz_convert(
-                    IST
-                )
-            else:
-                intraday.index = intraday.index.tz_localize(
-                    IST
-                )
+                    for ticker in batch:
 
-            today = datetime.now(IST).date()
+                        try:
 
-            intraday = intraday[
-                intraday.index.date == today
-            ]
+                            if (
+                                ticker
+                                in data.columns
+                                .levels[0]
+                            ):
 
-            if intraday.empty:
-                continue
+                                stock_data = (
+                                    data[ticker]
+                                    .copy()
+                                )
 
-            # ------------------------------------------------
-            # FIRST 5-MINUTE CANDLE
-            # 9:15 → 9:20
-            # ------------------------------------------------
+                                if not stock_data.empty:
 
-            first_candle = intraday[
-                (intraday.index.time >= dt_time(9, 15)) &
-                (intraday.index.time < dt_time(9, 20))
-            ]
+                                    all_data[
+                                        ticker
+                                    ] = stock_data
 
-            if first_candle.empty:
-                continue
+                        except Exception:
+                            continue
 
-            open_915 = float(
-                first_candle["Open"].iloc[0]
-            )
+                else:
 
-            # ------------------------------------------------
-            # LATEST PRICE AVAILABLE UP TO 9:19
-            # ------------------------------------------------
+                    if len(batch) == 1:
 
-            current_data = intraday[
-                (intraday.index.time >= dt_time(9, 15)) &
-                (intraday.index.time <= dt_time(9, 19, 59))
-            ]
-
-            if current_data.empty:
-                continue
-
-            ltp = float(
-                current_data["Close"].iloc[-1]
-            )
-
-            # ------------------------------------------------
-            # PREVIOUS DAY CLOSE → 9:19 %
-            # ------------------------------------------------
-
-            pct_change = (
-                (ltp - previous_close)
-                / previous_close
-            ) * 100
-
-            # ------------------------------------------------
-            # 9:15 OPEN → 9:19 PRICE
-            # ------------------------------------------------
-
-            candle_change = (
-                (ltp - open_915)
-                / open_915
-            ) * 100
-
-            if ltp > open_915:
-                candle = "GREEN"
-            elif ltp < open_915:
-                candle = "RED"
-            else:
-                candle = "NEUTRAL"
-
-            results.append({
-
-                "Symbol": clean_symbol(symbol),
-                "Sector": STOCK_SECTOR[symbol],
-
-                "Previous Close": previous_close,
-                "9:15 Open": open_915,
-                "9:19 Price": ltp,
-
-                "% Gain/Loss": pct_change,
-                "9:15→9:19 %": candle_change,
-
-                "Candle": candle
-            })
+                        all_data[
+                            batch[0]
+                        ] = data.copy()
 
         except Exception:
             continue
 
-    return pd.DataFrame(results)
+    return all_data
 
 
-# ============================================================
-# TITLE
-# ============================================================
+# =========================================================
+# SCAN
+# =========================================================
 
-st.title(
-    "🚀 SUMAN 9:19 AM INTRADAY SCREENER"
-)
+def scan_market(
+    data5,
+    data15
+):
 
-st.write(
-    "Top Gainer Sector + Top Loser Sector → "
-    "3 BUY + 3 SELL"
-)
+    records = []
 
-st.info(
-    "Calculation: Previous Day Close → 9:19 Price | "
-    "Direction: 9:15 Open → 9:19 Price"
-)
+    for ticker in NIFTY_500_STOCKS:
 
+        yf_symbol = (
+            f"{ticker}.NS"
+        )
 
-# ============================================================
-# CURRENT TIME
-# ============================================================
+        # -------------------------------------------------
+        # 5M
+        # -------------------------------------------------
 
-now = datetime.now(IST)
+        df5 = data5.get(
+            yf_symbol
+        )
 
-st.caption(
-    f"Current IST Time: {now.strftime('%d-%m-%Y %H:%M:%S')}"
-)
+        sig5 = get_signal(
+            df5
+        )
 
+        # -------------------------------------------------
+        # 15M
+        # -------------------------------------------------
 
-# ============================================================
-# MARKET CLOSED
-# ============================================================
+        df15 = data15.get(
+            yf_symbol
+        )
 
-if now.weekday() >= 5:
+        sig15 = get_signal(
+            df15
+        )
 
-    st.warning(
-        "🔴 NSE Market Closed — आज market बंद है। "
-        "अगले trading day को 9:19 AM पर scan करें।"
+        signal5 = (
+            sig5["Signal"]
+            if sig5
+            else "WAIT"
+        )
+
+        signal15 = (
+            sig15["Signal"]
+            if sig15
+            else "WAIT"
+        )
+
+        # -------------------------------------------------
+        # FINAL SIGNAL
+        # -------------------------------------------------
+
+        if (
+            signal5 == "BUY"
+            and
+            signal15 == "BUY"
+        ):
+
+            final_signal = "STRONG BUY"
+
+        elif (
+            signal5 == "SELL"
+            and
+            signal15 == "SELL"
+        ):
+
+            final_signal = "STRONG SELL"
+
+        elif (
+            signal5 == "BUY"
+            or
+            signal15 == "BUY"
+        ):
+
+            final_signal = "BUY"
+
+        elif (
+            signal5 == "SELL"
+            or
+            signal15 == "SELL"
+        ):
+
+            final_signal = "SELL"
+
+        else:
+
+            final_signal = "WAIT"
+
+        records.append(
+            {
+                "Symbol": ticker,
+
+                "5M Signal": signal5,
+
+                "15M Signal": signal15,
+
+                "Final Signal": final_signal,
+
+                "5M Close": (
+                    sig5["Close"]
+                    if sig5
+                    else np.nan
+                ),
+
+                "5M VWAP": (
+                    sig5["VWAP"]
+                    if sig5
+                    else np.nan
+                ),
+
+                "15M Close": (
+                    sig15["Close"]
+                    if sig15
+                    else np.nan
+                ),
+
+                "15M VWAP": (
+                    sig15["VWAP"]
+                    if sig15
+                    else np.nan
+                )
+            }
+        )
+
+    return pd.DataFrame(
+        records
     )
 
-    st.stop()
 
-
-# ============================================================
-# BEFORE 9:19
-# ============================================================
-
-if now.time() < SCAN_TIME:
-
-    st.info(
-        "⏳ Scanner 9:19 AM के बाद चलाएँ।"
-    )
-
-
-# ============================================================
-# SCAN BUTTON
-# ============================================================
+# =========================================================
+# BUTTON
+# =========================================================
 
 scan = st.button(
-    "🔎 SCAN 9:19 AM",
+    "🔍 SCAN NIFTY 500",
+    type="primary",
     use_container_width=True
 )
 
 
-# ============================================================
-# RUN
-# ============================================================
+# =========================================================
+# AUTO REFRESH
+# =========================================================
 
-if scan:
+auto_refresh = st.sidebar.checkbox(
+    "🔄 Auto Refresh",
+    value=False
+)
 
-    if now.time() < SCAN_TIME:
+refresh_seconds = st.sidebar.selectbox(
+    "Refresh Interval",
+    [30, 60, 120, 300],
+    index=1
+)
 
-        st.warning(
-            "⏳ अभी 9:19 AM नहीं हुआ है। "
-            "पहली 5-minute candle अभी बन रही है।"
-        )
 
-        st.stop()
+# =========================================================
+# RUN SCANNER
+# =========================================================
 
-    # --------------------------------------------------------
-    # LOAD DATA
-    # --------------------------------------------------------
+if scan or auto_refresh:
 
-    with st.spinner(
-        "📡 Market data scan हो रहा है..."
-    ):
+    start_time = time.time()
 
-        df = get_market_data()
-
-    # --------------------------------------------------------
-    # NO DATA
-    # --------------------------------------------------------
-
-    if df.empty:
-
-        st.error(
-            "आज की 5-minute market data उपलब्ध नहीं है। "
-            "कुछ समय बाद scan करें।"
-        )
-
-        st.stop()
-
-    # --------------------------------------------------------
-    # SECTOR RANKING
-    # --------------------------------------------------------
-
-    sector_df = (
-        df.groupby("Sector")["% Gain/Loss"]
-        .mean()
-        .reset_index()
-        .sort_values(
-            "% Gain/Loss",
-            ascending=False
-        )
+    now = datetime.now(
+        IST
     )
 
-    if sector_df.empty:
-
-        st.error(
-            "Sector data उपलब्ध नहीं है।"
-        )
-
-        st.stop()
-
-    # --------------------------------------------------------
-    # TOP SECTORS
-    # --------------------------------------------------------
-
-    top_gainer_sector = sector_df.iloc[0]["Sector"]
-
-    top_loser_sector = sector_df.iloc[-1]["Sector"]
-
-    top_gainer_pct = sector_df.iloc[0]["% Gain/Loss"]
-
-    top_loser_pct = sector_df.iloc[-1]["% Gain/Loss"]
-
-    # ========================================================
-    # TOP SECTOR DISPLAY
-    # ========================================================
-
-    st.subheader(
-        "🏭 9:19 AM Sector Ranking"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.success(
-            f"🟢 TOP GAINER SECTOR\n\n"
-            f"### {top_gainer_sector}\n"
-            f"Average: **{top_gainer_pct:+.2f}%**"
-        )
-
-    with col2:
-
-        st.error(
-            f"🔴 TOP LOSER SECTOR\n\n"
-            f"### {top_loser_sector}\n"
-            f"Average: **{top_loser_pct:+.2f}%**"
-        )
-
-    # ========================================================
-    # BUY STOCKS
-    # ========================================================
-
-    buy_stocks = df[
-        (df["Sector"] == top_gainer_sector) &
-        (df["% Gain/Loss"] > 0) &
-        (df["% Gain/Loss"] <= MAX_GAIN) &
-        (df["9:19 Price"] > df["9:15 Open"])
-    ].copy()
-
-    buy_stocks = buy_stocks.sort_values(
-        "% Gain/Loss",
-        ascending=False
-    ).head(3)
-
-    # ========================================================
-    # SELL STOCKS
-    # ========================================================
-
-    sell_stocks = df[
-        (df["Sector"] == top_loser_sector) &
-        (df["% Gain/Loss"] < 0) &
-        (df["% Gain/Loss"] >= MAX_LOSS) &
-        (df["9:19 Price"] < df["9:15 Open"])
-    ].copy()
-
-    sell_stocks = sell_stocks.sort_values(
-        "% Gain/Loss",
-        ascending=True
-    ).head(3)
-
-    # ========================================================
-    # BUY RESULT
-    # ========================================================
-
-    st.subheader(
-        f"🟢 BUY — {top_gainer_sector}"
-    )
-
-    if buy_stocks.empty:
-
-        st.warning(
-            "इस sector में qualifying BUY stock नहीं मिला।"
-        )
-
-    else:
-
-        buy_display = buy_stocks[
-            [
-                "Symbol",
-                "Previous Close",
-                "9:15 Open",
-                "9:19 Price",
-                "% Gain/Loss",
-                "9:15→9:19 %",
-                "Candle"
-            ]
-        ].copy()
-
-        buy_display["Signal"] = "🟢 BUY"
-
-        buy_display["% Gain/Loss"] = (
-            buy_display["% Gain/Loss"]
-            .map(lambda x: f"{x:+.2f}%")
-        )
-
-        buy_display["9:15→9:19 %"] = (
-            buy_display["9:15→9:19 %"]
-            .map(lambda x: f"{x:+.2f}%")
-        )
-
-        st.dataframe(
-            buy_display,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # ========================================================
-    # SELL RESULT
-    # ========================================================
-
-    st.subheader(
-        f"🔴 SELL — {top_loser_sector}"
-    )
-
-    if sell_stocks.empty:
-
-        st.warning(
-            "इस sector में qualifying SELL stock नहीं मिला।"
-        )
-
-    else:
-
-        sell_display = sell_stocks[
-            [
-                "Symbol",
-                "Previous Close",
-                "9:15 Open",
-                "9:19 Price",
-                "% Gain/Loss",
-                "9:15→9:19 %",
-                "Candle"
-            ]
-        ].copy()
-
-        sell_display["Signal"] = "🔴 SELL"
-
-        sell_display["% Gain/Loss"] = (
-            sell_display["% Gain/Loss"]
-            .map(lambda x: f"{x:+.2f}%")
-        )
-
-        sell_display["9:15→9:19 %"] = (
-            sell_display["9:15→9:19 %"]
-            .map(lambda x: f"{x:+.2f}%")
-        )
-
-        st.dataframe(
-            sell_display,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # ========================================================
-    # COMPLETE SECTOR RANKING
-    # ========================================================
-
-    with st.expander(
-        "📊 सभी Sector की Ranking देखें"
-    ):
-
-        ranking = sector_df.copy()
-
-        ranking["% Gain/Loss"] = (
-            ranking["% Gain/Loss"]
-            .map(lambda x: f"{x:+.2f}%")
-        )
-
-        st.dataframe(
-            ranking,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    # ========================================================
-    # FINAL 9:20 SUMMARY
-    # ========================================================
-
-    st.subheader(
-        "🎯 9:20 AM TRADE CANDIDATES"
-    )
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-
-        if not buy_stocks.empty:
-
-            st.success(
-                "🟢 BUY\n\n" +
-                "\n".join(
-                    [
-                        f"{i+1}. {row['Symbol']} "
-                        f"({row['% Gain/Loss']:+.2f}%)"
-                        for i, (_, row)
-                        in enumerate(buy_stocks.iterrows())
-                    ]
-                )
-            )
-
-        else:
-
-            st.info(
-                "कोई BUY candidate नहीं।"
-            )
-
-    with c2:
-
-        if not sell_stocks.empty:
-
-            st.error(
-                "🔴 SELL\n\n" +
-                "\n".join(
-                    [
-                        f"{i+1}. {row['Symbol']} "
-                        f"({row['% Gain/Loss']:+.2f}%)"
-                        for i, (_, row)
-                        in enumerate(sell_stocks.iterrows())
-                    ]
-                )
-            )
-
-        else:
-
-            st.info(
-                "कोई SELL candidate नहीं।"
-            )
-
-    # ========================================================
-    # SCAN TIME
-    # ========================================================
-
-    st.caption(
-        "Scan completed: "
-        + datetime.now(IST).strftime(
+    st.info(
+        "🕐 Scan Time: "
+        + now.strftime(
             "%d-%m-%Y %H:%M:%S"
         )
         + " IST"
     )
+
+    progress = st.progress(0)
+
+    status = st.empty()
+
+    # =====================================================
+    # 5M
+    # =====================================================
+
+    status.info(
+        "📥 5 Minute data download हो रहा है..."
+    )
+
+    data5 = download_timeframe(
+        YF_TICKERS,
+        "5m"
+    )
+
+    progress.progress(40)
+
+    # =====================================================
+    # 15M
+    # =====================================================
+
+    status.info(
+        "📥 15 Minute data download हो रहा है..."
+    )
+
+    data15 = download_timeframe(
+        YF_TICKERS,
+        "15m"
+    )
+
+    progress.progress(70)
+
+    # =====================================================
+    # SCAN
+    # =====================================================
+
+    status.info(
+        "🔎 500 Stocks का VWAP Cross scan हो रहा है..."
+    )
+
+    result = scan_market(
+        data5,
+        data15
+    )
+
+    progress.progress(100)
+
+    elapsed = round(
+        time.time()
+        - start_time,
+        2
+    )
+
+    status.success(
+        f"✅ Scan Complete — "
+        f"{len(result)} Stocks Checked — "
+        f"{elapsed} seconds"
+    )
+
+
+    # =====================================================
+    # FORMAT
+    # =====================================================
+
+    if not result.empty:
+
+        numeric_cols = [
+            "5M Close",
+            "5M VWAP",
+            "15M Close",
+            "15M VWAP"
+        ]
+
+        for col in numeric_cols:
+
+            result[col] = (
+                pd.to_numeric(
+                    result[col],
+                    errors="coerce"
+                )
+                .round(2)
+            )
+
+
+        # =================================================
+        # SIGNAL GROUPS
+        # =================================================
+
+        strong_buy = result[
+            result["Final Signal"]
+            == "STRONG BUY"
+        ]
+
+        strong_sell = result[
+            result["Final Signal"]
+            == "STRONG SELL"
+        ]
+
+        buy = result[
+            result["Final Signal"]
+            == "BUY"
+        ]
+
+        sell = result[
+            result["Final Signal"]
+            == "SELL"
+        ]
+
+
+        # =================================================
+        # DASHBOARD
+        # =================================================
+
+        st.subheader(
+            "📊 SCANNER SUMMARY"
+        )
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+
+        c1.metric(
+            "NIFTY 500",
+            "500"
+        )
+
+        c2.metric(
+            "🟢 STRONG BUY",
+            len(strong_buy)
+        )
+
+        c3.metric(
+            "🔴 STRONG SELL",
+            len(strong_sell)
+        )
+
+        c4.metric(
+            "🟢 BUY",
+            len(buy)
+        )
+
+        c5.metric(
+            "🔴 SELL",
+            len(sell)
+        )
+
+
+        # =================================================
+        # STRONG BUY
+        # =================================================
+
+        st.subheader(
+            "🟢 STRONG BUY — 5M + 15M"
+        )
+
+        if strong_buy.empty:
+
+            st.info(
+                "आज कोई Strong Buy नहीं मिला।"
+            )
+
+        else:
+
+            st.dataframe(
+                strong_buy,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        # =================================================
+        # STRONG SELL
+        # =================================================
+
+        st.subheader(
+            "🔴 STRONG SELL — 5M + 15M"
+        )
+
+        if strong_sell.empty:
+
+            st.info(
+                "आज कोई Strong Sell नहीं मिला।"
+            )
+
+        else:
+
+            st.dataframe(
+                strong_sell,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        # =================================================
+        # BUY
+        # =================================================
+
+        st.subheader(
+            "🟢 BUY — VWAP CROSS"
+        )
+
+        if buy.empty:
+
+            st.info(
+                "आज कोई BUY नहीं मिला।"
+            )
+
+        else:
+
+            st.dataframe(
+                buy,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        # =================================================
+        # SELL
+        # =================================================
+
+        st.subheader(
+            "🔴 SELL — VWAP CROSS"
+        )
+
+        if sell.empty:
+
+            st.info(
+                "आज कोई SELL नहीं मिला।"
+            )
+
+        else:
+
+            st.dataframe(
+                sell,
+                use_container_width=True,
+                hide_index=True
+            )
+
+
+        # =================================================
+        # ALL 500
+        # =================================================
+
+        with st.expander(
+            "📊 ALL 500 STOCK RESULTS"
+        ):
+
+            st.dataframe(
+                result,
+                use_container_width=True,
+                hide_index=True,
+                height=700
+            )
+
+
+        # =================================================
+        # CSV
+        # =================================================
+
+        csv = result.to_csv(
+            index=False
+        ).encode(
+            "utf-8"
+        )
+
+        st.download_button(
+            "⬇️ Download CSV",
+            csv,
+            "Suman_NIFTY500_VWAP_Scanner.csv",
+            "text/csv",
+            use_container_width=True
+        )
+
+    else:
+
+        st.warning(
+            "कोई data उपलब्ध नहीं हुआ।"
+        )
+
+
+# =========================================================
+# FOOTER
+# =========================================================
+
+st.markdown("---")
+
+st.caption(
+    "SUMAN NIFTY 500 VWAP SCANNER | "
+    "500 Embedded Stocks | "
+    "5M + 15M VWAP Cross | "
+    "Yahoo Finance Data"
+)
+
+
+# =========================================================
+# AUTO REFRESH
+# =========================================================
+
+if auto_refresh:
+
+    time.sleep(
+        refresh_seconds
+    )
+
+    st.rerun()
