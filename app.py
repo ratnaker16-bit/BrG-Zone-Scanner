@@ -12,14 +12,14 @@ import time
 # =========================================================
 
 st.set_page_config(
-    page_title="Suman NIFTY 500 VWAP Scanner",
+    page_title="Suman NIFTY 500 SMA Scanner",
     page_icon="📊",
     layout="wide"
 )
 
 
 # =========================================================
-# NIFTY 500 — EMBEDDED 500 STOCK UNIVERSE
+# NIFTY 500 — 500 STOCK UNIVERSE
 # =========================================================
 
 NIFTY_500_STOCKS = """
@@ -86,22 +86,26 @@ ZFCVINDIA ZEEL ZENTEC ZENSARTECH ZYDUSLIFE ZYDUSWELL ECLERX
 
 
 # =========================================================
-# VALIDATION
+# REMOVE DUPLICATES + VALIDATE
 # =========================================================
 
-NIFTY_500_STOCKS = list(dict.fromkeys(NIFTY_500_STOCKS))
+NIFTY_500_STOCKS = list(
+    dict.fromkeys(NIFTY_500_STOCKS)
+)
 
 if len(NIFTY_500_STOCKS) != 500:
+
     st.error(
         f"❌ Stock Universe Error: "
         f"{len(NIFTY_500_STOCKS)} stocks loaded. "
         f"Expected exactly 500."
     )
+
     st.stop()
 
 
 # =========================================================
-# YAHOO FINANCE SYMBOLS
+# YAHOO FINANCE TICKERS
 # =========================================================
 
 YF_TICKERS = [
@@ -114,24 +118,33 @@ YF_TICKERS = [
 # TIMEZONE
 # =========================================================
 
-IST = pytz.timezone("Asia/Kolkata")
+IST = pytz.timezone(
+    "Asia/Kolkata"
+)
 
 
 # =========================================================
 # HEADER
 # =========================================================
 
-st.title("📊 SUMAN NIFTY 500 VWAP SCANNER")
+st.title(
+    "📊 SUMAN NIFTY 500 SMA CROSSOVER SCANNER"
+)
 
 st.markdown(
     """
-    ### 5M + 15M VWAP CROSS SCANNER
+### 5M + 15M — SMA 20 / SMA 200 CROSSOVER
 
-    🟢 **STRONG BUY** = 5M BUY + 15M BUY  
-    🔴 **STRONG SELL** = 5M SELL + 15M SELL  
-    🟢 **BUY** = VWAP Bullish Cross  
-    🔴 **SELL** = VWAP Bearish Cross
-    """
+🟢 **BUY:** Price > SMA 200 + Price crosses SMA 20 upward
+
+🔴 **SELL:** Price < SMA 200 + Price crosses SMA 20 downward
+
+🟢 **STRONG BUY:** 5M BUY + 15M BUY
+
+🔴 **STRONG SELL:** 5M SELL + 15M SELL
+
+⚪ **WAIT:** No fresh crossover
+"""
 )
 
 
@@ -139,31 +152,44 @@ st.markdown(
 # SIDEBAR
 # =========================================================
 
-st.sidebar.header("⚙️ Scanner Settings")
+st.sidebar.header(
+    "⚙️ Scanner Settings"
+)
 
 st.sidebar.success(
     f"✅ NIFTY 500: {len(NIFTY_500_STOCKS)} Stocks"
 )
 
-st.sidebar.info("5 Minute: ON")
-st.sidebar.info("15 Minute: ON")
-st.sidebar.info("1 Hour: OFF")
+st.sidebar.info(
+    "5 Minute: ON"
+)
+
+st.sidebar.info(
+    "15 Minute: ON"
+)
+
+st.sidebar.info(
+    "SMA 20: ON"
+)
+
+st.sidebar.info(
+    "SMA 200: ON"
+)
 
 show_all = st.sidebar.checkbox(
-    "Show Complete 500 Stock List",
+    "📋 Show Complete 500 Stock List",
     value=False
 )
 
 
 # =========================================================
-# COMPLETE STOCK LIST
+# STOCK LIST
 # =========================================================
 
 if show_all:
 
     st.subheader(
-        f"📋 COMPLETE NIFTY 500 STOCK LIST — "
-        f"{len(NIFTY_500_STOCKS)} STOCKS"
+        "📋 COMPLETE NIFTY 500 STOCK LIST"
     )
 
     stock_df = pd.DataFrame(
@@ -172,6 +198,7 @@ if show_all:
                 1,
                 len(NIFTY_500_STOCKS) + 1
             ),
+
             "Symbol": NIFTY_500_STOCKS
         }
     )
@@ -182,46 +209,6 @@ if show_all:
         hide_index=True,
         height=600
     )
-
-
-# =========================================================
-# VWAP
-# =========================================================
-
-def calculate_vwap(df):
-
-    df = df.copy()
-
-    typical_price = (
-        df["High"]
-        + df["Low"]
-        + df["Close"]
-    ) / 3
-
-    volume = (
-        pd.to_numeric(
-            df["Volume"],
-            errors="coerce"
-        )
-        .fillna(0)
-    )
-
-    cumulative_pv = (
-        typical_price * volume
-    ).cumsum()
-
-    cumulative_volume = (
-        volume.cumsum()
-    )
-
-    df["VWAP"] = np.where(
-        cumulative_volume > 0,
-        cumulative_pv /
-        cumulative_volume,
-        np.nan
-    )
-
-    return df
 
 
 # =========================================================
@@ -249,13 +236,6 @@ def prepare_data(df):
     ):
         return None
 
-    df = df.dropna(
-        subset=["Close"]
-    )
-
-    if df.empty:
-        return None
-
     for col in required:
 
         df[col] = pd.to_numeric(
@@ -263,14 +243,16 @@ def prepare_data(df):
             errors="coerce"
         )
 
-    df["Volume"] = (
-        df["Volume"]
-        .fillna(0)
+    df = df.dropna(
+        subset=["Close"]
     )
 
-    # -----------------------------------------------------
+    if df.empty:
+        return None
+
+    # =====================================================
     # TIMEZONE
-    # -----------------------------------------------------
+    # =====================================================
 
     try:
 
@@ -289,9 +271,9 @@ def prepare_data(df):
     except Exception:
         pass
 
-    # -----------------------------------------------------
+    # =====================================================
     # MARKET HOURS
-    # -----------------------------------------------------
+    # =====================================================
 
     try:
 
@@ -306,24 +288,37 @@ def prepare_data(df):
     if df.empty:
         return None
 
-    # -----------------------------------------------------
-    # VWAP
-    # -----------------------------------------------------
+    # =====================================================
+    # SMA 20
+    # =====================================================
 
-    df = calculate_vwap(df)
-
-    df = df.dropna(
-        subset=["VWAP"]
+    df["SMA20"] = (
+        df["Close"]
+        .rolling(
+            window=20,
+            min_periods=20
+        )
+        .mean()
     )
 
-    if df.empty:
-        return None
+    # =====================================================
+    # SMA 200
+    # =====================================================
+
+    df["SMA200"] = (
+        df["Close"]
+        .rolling(
+            window=200,
+            min_periods=200
+        )
+        .mean()
+    )
 
     return df
 
 
 # =========================================================
-# VWAP CROSS
+# SIGNAL LOGIC
 # =========================================================
 
 def get_signal(df):
@@ -333,55 +328,117 @@ def get_signal(df):
     if df is None:
         return None
 
-    if len(df) < 2:
+    # Need previous + current candle
+    if len(df) < 201:
         return None
 
+    # Remove rows where SMA not available
+    valid = df.dropna(
+        subset=[
+            "SMA20",
+            "SMA200"
+        ]
+    )
+
+    if len(valid) < 2:
+        return None
+
+    prev = valid.iloc[-2]
+    curr = valid.iloc[-1]
+
     prev_close = float(
-        df["Close"].iloc[-2]
+        prev["Close"]
     )
 
     curr_close = float(
-        df["Close"].iloc[-1]
+        curr["Close"]
     )
 
-    prev_vwap = float(
-        df["VWAP"].iloc[-2]
+    prev_sma20 = float(
+        prev["SMA20"]
     )
 
-    curr_vwap = float(
-        df["VWAP"].iloc[-1]
+    curr_sma20 = float(
+        curr["SMA20"]
     )
 
-    signal = "WAIT"
+    curr_sma200 = float(
+        curr["SMA200"]
+    )
 
-    # -----------------------------------------------------
-    # BUY CROSS
-    # -----------------------------------------------------
+    # =====================================================
+    # BUY
+    #
+    # Current price must be above SMA200
+    # AND price crosses SMA20 upward
+    # =====================================================
 
-    if (
-        prev_close <= prev_vwap
+    buy_cross = (
+        prev_close <= prev_sma20
         and
-        curr_close > curr_vwap
-    ):
+        curr_close > curr_sma20
+        and
+        curr_close > curr_sma200
+    )
+
+    # =====================================================
+    # SELL
+    #
+    # Current price must be below SMA200
+    # AND price crosses SMA20 downward
+    # =====================================================
+
+    sell_cross = (
+        prev_close >= prev_sma20
+        and
+        curr_close < curr_sma20
+        and
+        curr_close < curr_sma200
+    )
+
+    # =====================================================
+    # SIGNAL
+    # =====================================================
+
+    if buy_cross:
 
         signal = "BUY"
 
-    # -----------------------------------------------------
-    # SELL CROSS
-    # -----------------------------------------------------
-
-    elif (
-        prev_close >= prev_vwap
-        and
-        curr_close < curr_vwap
-    ):
+    elif sell_cross:
 
         signal = "SELL"
 
+    else:
+
+        signal = "WAIT"
+
+    # =====================================================
+    # TREND STATUS
+    # =====================================================
+
+    if curr_close > curr_sma200:
+
+        trend = "ABOVE 200 SMA"
+
+    elif curr_close < curr_sma200:
+
+        trend = "BELOW 200 SMA"
+
+    else:
+
+        trend = "AT 200 SMA"
+
     return {
+
         "Signal": signal,
+
         "Close": curr_close,
-        "VWAP": curr_vwap
+
+        "SMA20": curr_sma20,
+
+        "SMA200": curr_sma200,
+
+        "Trend": trend
     }
 
 
@@ -397,9 +454,12 @@ def download_timeframe(
 
     all_data = {}
 
-    # -----------------------------------------------------
-    # BATCH DOWNLOAD
-    # -----------------------------------------------------
+    # =====================================================
+    # IMPORTANT:
+    # 200 SMA के लिए पर्याप्त history
+    # =====================================================
+
+    period = "60d"
 
     batch_size = 75
 
@@ -410,70 +470,96 @@ def download_timeframe(
     ):
 
         batch = tickers[
-            start:
-            start + batch_size
+            start:start + batch_size
         ]
 
         try:
 
             data = yf.download(
+
                 tickers=batch,
-                period="1d",
+
+                period=period,
+
                 interval=interval,
+
                 group_by="ticker",
+
                 auto_adjust=False,
+
                 prepost=False,
+
                 threads=True,
+
                 progress=False
             )
 
-            if data is not None and not data.empty:
+            if (
+                data is None
+                or data.empty
+            ):
+                continue
 
-                if isinstance(
-                    data.columns,
-                    pd.MultiIndex
-                ):
+            # =================================================
+            # MULTI STOCK DATA
+            # =================================================
 
-                    for ticker in batch:
+            if isinstance(
+                data.columns,
+                pd.MultiIndex
+            ):
 
-                        try:
+                for ticker in batch:
+
+                    try:
+
+                        if (
+                            ticker
+                            in data.columns
+                            .levels[0]
+                        ):
+
+                            stock_data = (
+                                data[ticker]
+                                .copy()
+                            )
 
                             if (
-                                ticker
-                                in data.columns
-                                .levels[0]
+                                stock_data
+                                is not None
+                                and
+                                not stock_data.empty
                             ):
 
-                                stock_data = (
-                                    data[ticker]
-                                    .copy()
-                                )
+                                all_data[
+                                    ticker
+                                ] = stock_data
 
-                                if not stock_data.empty:
+                    except Exception:
 
-                                    all_data[
-                                        ticker
-                                    ] = stock_data
+                        continue
 
-                        except Exception:
-                            continue
+            # =================================================
+            # SINGLE STOCK DATA
+            # =================================================
 
-                else:
+            else:
 
-                    if len(batch) == 1:
+                if len(batch) == 1:
 
-                        all_data[
-                            batch[0]
-                        ] = data.copy()
+                    all_data[
+                        batch[0]
+                    ] = data.copy()
 
         except Exception:
+
             continue
 
     return all_data
 
 
 # =========================================================
-# SCAN
+# SCAN MARKET
 # =========================================================
 
 def scan_market(
@@ -489,9 +575,9 @@ def scan_market(
             f"{ticker}.NS"
         )
 
-        # -------------------------------------------------
-        # 5M
-        # -------------------------------------------------
+        # =================================================
+        # 5 MINUTE
+        # =================================================
 
         df5 = data5.get(
             yf_symbol
@@ -501,9 +587,9 @@ def scan_market(
             df5
         )
 
-        # -------------------------------------------------
-        # 15M
-        # -------------------------------------------------
+        # =================================================
+        # 15 MINUTE
+        # =================================================
 
         df15 = data15.get(
             yf_symbol
@@ -512,6 +598,10 @@ def scan_market(
         sig15 = get_signal(
             df15
         )
+
+        # =================================================
+        # SIGNALS
+        # =================================================
 
         signal5 = (
             sig5["Signal"]
@@ -525,9 +615,9 @@ def scan_market(
             else "WAIT"
         )
 
-        # -------------------------------------------------
+        # =================================================
         # FINAL SIGNAL
-        # -------------------------------------------------
+        # =================================================
 
         if (
             signal5 == "BUY"
@@ -535,7 +625,9 @@ def scan_market(
             signal15 == "BUY"
         ):
 
-            final_signal = "STRONG BUY"
+            final_signal = (
+                "STRONG BUY"
+            )
 
         elif (
             signal5 == "SELL"
@@ -543,7 +635,9 @@ def scan_market(
             signal15 == "SELL"
         ):
 
-            final_signal = "STRONG SELL"
+            final_signal = (
+                "STRONG SELL"
+            )
 
         elif (
             signal5 == "BUY"
@@ -565,8 +659,13 @@ def scan_market(
 
             final_signal = "WAIT"
 
+        # =================================================
+        # RECORD
+        # =================================================
+
         records.append(
             {
+
                 "Symbol": ticker,
 
                 "5M Signal": signal5,
@@ -581,10 +680,22 @@ def scan_market(
                     else np.nan
                 ),
 
-                "5M VWAP": (
-                    sig5["VWAP"]
+                "5M SMA20": (
+                    sig5["SMA20"]
                     if sig5
                     else np.nan
+                ),
+
+                "5M SMA200": (
+                    sig5["SMA200"]
+                    if sig5
+                    else np.nan
+                ),
+
+                "5M Trend": (
+                    sig5["Trend"]
+                    if sig5
+                    else "NO DATA"
                 ),
 
                 "15M Close": (
@@ -593,10 +704,22 @@ def scan_market(
                     else np.nan
                 ),
 
-                "15M VWAP": (
-                    sig15["VWAP"]
+                "15M SMA20": (
+                    sig15["SMA20"]
                     if sig15
                     else np.nan
+                ),
+
+                "15M SMA200": (
+                    sig15["SMA200"]
+                    if sig15
+                    else np.nan
+                ),
+
+                "15M Trend": (
+                    sig15["Trend"]
+                    if sig15
+                    else "NO DATA"
                 )
             }
         )
@@ -607,7 +730,7 @@ def scan_market(
 
 
 # =========================================================
-# BUTTON
+# SCAN BUTTON
 # =========================================================
 
 scan = st.button(
@@ -658,7 +781,7 @@ if scan or auto_refresh:
     status = st.empty()
 
     # =====================================================
-    # 5M
+    # 5M DATA
     # =====================================================
 
     status.info(
@@ -673,7 +796,7 @@ if scan or auto_refresh:
     progress.progress(40)
 
     # =====================================================
-    # 15M
+    # 15M DATA
     # =====================================================
 
     status.info(
@@ -692,7 +815,8 @@ if scan or auto_refresh:
     # =====================================================
 
     status.info(
-        "🔎 500 Stocks का VWAP Cross scan हो रहा है..."
+        "🔎 NIFTY 500 में SMA20 / SMA200 "
+        "crossover scan हो रहा है..."
     )
 
     result = scan_market(
@@ -714,7 +838,6 @@ if scan or auto_refresh:
         f"{elapsed} seconds"
     )
 
-
     # =====================================================
     # FORMAT
     # =====================================================
@@ -723,9 +846,11 @@ if scan or auto_refresh:
 
         numeric_cols = [
             "5M Close",
-            "5M VWAP",
+            "5M SMA20",
+            "5M SMA200",
             "15M Close",
-            "15M VWAP"
+            "15M SMA20",
+            "15M SMA200"
         ]
 
         for col in numeric_cols:
@@ -737,7 +862,6 @@ if scan or auto_refresh:
                 )
                 .round(2)
             )
-
 
         # =================================================
         # SIGNAL GROUPS
@@ -763,7 +887,6 @@ if scan or auto_refresh:
             == "SELL"
         ]
 
-
         # =================================================
         # DASHBOARD
         # =================================================
@@ -776,7 +899,7 @@ if scan or auto_refresh:
 
         c1.metric(
             "NIFTY 500",
-            "500"
+            len(result)
         )
 
         c2.metric(
@@ -798,7 +921,6 @@ if scan or auto_refresh:
             "🔴 SELL",
             len(sell)
         )
-
 
         # =================================================
         # STRONG BUY
@@ -822,7 +944,6 @@ if scan or auto_refresh:
                 hide_index=True
             )
 
-
         # =================================================
         # STRONG SELL
         # =================================================
@@ -845,13 +966,12 @@ if scan or auto_refresh:
                 hide_index=True
             )
 
-
         # =================================================
         # BUY
         # =================================================
 
         st.subheader(
-            "🟢 BUY — VWAP CROSS"
+            "🟢 BUY — SMA20 CROSS ABOVE"
         )
 
         if buy.empty:
@@ -868,13 +988,12 @@ if scan or auto_refresh:
                 hide_index=True
             )
 
-
         # =================================================
         # SELL
         # =================================================
 
         st.subheader(
-            "🔴 SELL — VWAP CROSS"
+            "🔴 SELL — SMA20 CROSS BELOW"
         )
 
         if sell.empty:
@@ -891,7 +1010,6 @@ if scan or auto_refresh:
                 hide_index=True
             )
 
-
         # =================================================
         # ALL 500
         # =================================================
@@ -907,21 +1025,20 @@ if scan or auto_refresh:
                 height=700
             )
 
-
         # =================================================
         # CSV
         # =================================================
 
-        csv = result.to_csv(
-            index=False
-        ).encode(
-            "utf-8"
+        csv = (
+            result
+            .to_csv(index=False)
+            .encode("utf-8")
         )
 
         st.download_button(
             "⬇️ Download CSV",
             csv,
-            "Suman_NIFTY500_VWAP_Scanner.csv",
+            "Suman_NIFTY500_SMA20_SMA200_Scanner.csv",
             "text/csv",
             use_container_width=True
         )
@@ -929,7 +1046,7 @@ if scan or auto_refresh:
     else:
 
         st.warning(
-            "कोई data उपलब्ध नहीं हुआ।"
+            "⚠️ कोई data उपलब्ध नहीं हुआ।"
         )
 
 
@@ -940,9 +1057,10 @@ if scan or auto_refresh:
 st.markdown("---")
 
 st.caption(
-    "SUMAN NIFTY 500 VWAP SCANNER | "
-    "500 Embedded Stocks | "
-    "5M + 15M VWAP Cross | "
+    "SUMAN NIFTY 500 SMA CROSSOVER SCANNER | "
+    "500 Stocks | "
+    "5M + 15M | "
+    "Price + SMA20 + SMA200 | "
     "Yahoo Finance Data"
 )
 
