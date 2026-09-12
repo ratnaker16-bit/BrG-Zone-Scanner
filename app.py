@@ -1,115 +1,259 @@
-# ============================================================
-# BrG Trading Zone V1.0
-# NIFTY 200 Multi-Timeframe Demand / Supply Zone Scanner
-# Timeframes: 15m, 1H, 2H, 3H, Daily, Weekly
-# Data Source: Yahoo Finance
-# ============================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 import yfinance as yf
 from datetime import datetime
 import time
+
+# ============================================================
+# BrG Trading Zone Screener V1.0
+# Based on the supplied Pine Script Zone logic
+#
+# Timeframes:
+# 15M / 1H / 2H / 3H / Daily / Weekly
+#
+# 2H and 3H are created from 1H data.
+# ============================================================
+
 
 # ============================================================
 # PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
-    page_title="BrG Trading Zone V1.0",
+    page_title="BrG Trading Zone",
     page_icon="📊",
     layout="wide"
 )
+
 
 # ============================================================
 # TITLE
 # ============================================================
 
-st.title("📊 BrG Trading Zone V1.0")
+st.title("📊 BrG Trading Zone Screener V1.0")
+
 st.caption(
-    "NIFTY 200 | Demand & Supply | Support & Resistance | "
+    "Demand / Supply Zone Screener | "
+    "RBR • DBR • DBD • RBD | "
     "15M • 1H • 2H • 3H • Daily • Weekly"
 )
 
+
 # ============================================================
-# NIFTY 200
-# NOTE: Static snapshot. Update periodically if required.
+# NIFTY UNIVERSE
 # ============================================================
 
 NIFTY200 = sorted(set([
-    # ---------------- NIFTY 50 ----------------
-    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT",
-    "AXISBANK", "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV",
-    "BEL", "BHARTIARTL", "CIPLA", "COALINDIA",
-    "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM",
-    "HCLTECH", "HDFCBANK", "HDFCLIFE", "HEROMOTOCO",
-    "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDUSINDBK",
-    "INFY", "ITC", "JIOFIN", "JSWSTEEL",
-    "KOTAKBANK", "LT", "M&M", "MARUTI",
-    "NESTLEIND", "NTPC", "ONGC", "POWERGRID",
-    "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN",
-    "SUNPHARMA", "TATACONSUM", "TATASTEEL", "TCS",
-    "TECHM", "TITAN", "TRENT", "ULTRACEMCO",
+    "ADANIENT",
+    "ADANIPORTS",
+    "APOLLOHOSP",
+    "ASIANPAINT",
+    "AXISBANK",
+    "BAJAJ-AUTO",
+    "BAJFINANCE",
+    "BAJAJFINSV",
+    "BEL",
+    "BHARTIARTL",
+    "CIPLA",
+    "COALINDIA",
+    "DRREDDY",
+    "EICHERMOT",
+    "ETERNAL",
+    "GRASIM",
+    "HCLTECH",
+    "HDFCBANK",
+    "HDFCLIFE",
+    "HEROMOTOCO",
+    "HINDALCO",
+    "HINDUNILVR",
+    "ICICIBANK",
+    "INDUSINDBK",
+    "INFY",
+    "ITC",
+    "JIOFIN",
+    "JSWSTEEL",
+    "KOTAKBANK",
+    "LT",
+    "M&M",
+    "MARUTI",
+    "NESTLEIND",
+    "NTPC",
+    "ONGC",
+    "POWERGRID",
+    "RELIANCE",
+    "SBILIFE",
+    "SBIN",
+    "SHRIRAMFIN",
+    "SUNPHARMA",
+    "TATACONSUM",
+    "TATASTEEL",
+    "TCS",
+    "TECHM",
+    "TITAN",
+    "TRENT",
+    "ULTRACEMCO",
     "WIPRO",
 
-    # ---------------- NEXT 50 ----------------
-    "ABB", "AMBUJACEM", "BANKBARODA", "BOSCHLTD",
-    "CANBK", "CGPOWER", "CHOLAFIN", "COLPAL",
-    "DABUR", "DIVISLAB", "DLF", "DMART",
-    "GAIL", "GODREJCP", "GODREJPROP", "HAL",
-    "HAVELLS", "ICICIGI", "ICICIPRULI", "INDHOTEL",
-    "INDIANB", "INDUSTOWER", "IOC", "IRCTC",
-    "JINDALSTEL", "JSWENERGY", "LICI", "LODHA",
-    "LUPIN", "MARICO", "MAXHEALTH", "MOTHERSON",
-    "MPHASIS", "MUTHOOTFIN", "NHPC", "NMDC",
-    "OBEROIRLTY", "OFSS", "OIL", "PAGEIND",
-    "PAYTM", "PERSISTENT", "PFC", "PIDILITIND",
-    "PIIND", "PNB", "POLYCAB", "RECLTD",
-    "SAIL", "SBICARD", "SIEMENS", "SRF",
-    "SUPREMEIND", "TATAPOWER", "TORNTPHARM", "TORNTPOWER",
-    "TVSMOTOR", "UNITEDSPIRITS", "VEDL", "VOLTAS",
+    "ABB",
+    "AMBUJACEM",
+    "BANKBARODA",
+    "BOSCHLTD",
+    "CANBK",
+    "CGPOWER",
+    "CHOLAFIN",
+    "COLPAL",
+    "DABUR",
+    "DIVISLAB",
+    "DLF",
+    "DMART",
+    "GAIL",
+    "GODREJCP",
+    "GODREJPROP",
+    "HAL",
+    "HAVELLS",
+    "ICICIGI",
+    "ICICIPRULI",
+    "INDHOTEL",
+    "INDIANB",
+    "INDUSTOWER",
+    "IOC",
+    "IRCTC",
+    "JINDALSTEL",
+    "JSWENERGY",
+    "LICI",
+    "LODHA",
+    "LUPIN",
+    "MARICO",
+    "MAXHEALTH",
+    "MOTHERSON",
+    "MPHASIS",
+    "MUTHOOTFIN",
+    "NHPC",
+    "NMDC",
+    "OBEROIRLTY",
+    "OFSS",
+    "OIL",
+    "PAGEIND",
+    "PAYTM",
+    "PERSISTENT",
+    "PFC",
+    "PIDILITIND",
+    "PIIND",
+    "PNB",
+    "POLYCAB",
+    "RECLTD",
+    "SAIL",
+    "SBICARD",
+    "SIEMENS",
+    "SRF",
+    "SUPREMEIND",
+    "TATAPOWER",
+    "TORNTPHARM",
+    "TORNTPOWER",
+    "TVSMOTOR",
+    "UNITEDSPIRITS",
+    "VEDL",
+    "VOLTAS",
 
-    # ---------------- MIDCAP / LARGE MIDCAP ----------------
-    "ABCAPITAL", "ABFRL", "ACC", "ALKEM",
-    "APLAPOLLO", "ASHOKLEY", "ASTRAL", "AUROPHARMA",
-    "BALKRISIND", "BANDHANBNK", "BATAINDIA", "BHARATFORG",
-    "BIOCON", "BLUESTARCO", "BSE", "CAMS",
-    "CDSL", "CENTRALBK", "CESC", "COFORGE",
-    "CONCOR", "COROMANDEL", "CROMPTON", "CYIENT",
-    "DALBHARAT", "DEEPAKNTR", "DELHIVERY", "ESCORTS",
-    "EXIDEIND", "FEDERALBNK", "FORTIS", "GLENMARK",
-    "GMRINFRA", "GNFC", "GODFRYPHLP", "GUJGASLTD",
-    "IDFCFIRSTB", "IEX", "IGL", "INDIAMART",
-    "IPCALAB", "IRFC", "JUBLFOOD", "KALYANKJIL",
-    "KEI", "KPITTECH", "LAURUSLABS", "LICHSGFIN",
-    "LTIM", "MANAPPURAM", "MCX", "METROPOLIS",
-    "MGL", "MINDTREE", "MRF", "NATIONALUM",
-    "NAVINFLUOR", "NLCINDIA", "OLECTRA", "PEL",
-    "PERSISTENT", "PHOENIXLTD", "POLYMED", "PRESTIGE",
-    "RAMCOCEM", "RBLBANK", "SONACOMS", "STARHEALTH",
-    "SUMICHEM", "SUNDARMFIN", "SUNTV", "TATACHEM",
-    "TATACOMM", "TATAELXSI", "THERMAX", "TIMKEN",
-    "TITAN", "UBL", "UNOMINDA", "UPL",
-    "VBL", "VINATIORGA", "ZEEL"
+    "ABCAPITAL",
+    "ABFRL",
+    "ACC",
+    "ALKEM",
+    "APLAPOLLO",
+    "ASHOKLEY",
+    "ASTRAL",
+    "AUROPHARMA",
+    "BALKRISIND",
+    "BANDHANBNK",
+    "BATAINDIA",
+    "BHARATFORG",
+    "BIOCON",
+    "BLUESTARCO",
+    "BSE",
+    "CAMS",
+    "CDSL",
+    "CENTRALBK",
+    "CESC",
+    "COFORGE",
+    "CONCOR",
+    "COROMANDEL",
+    "CROMPTON",
+    "CYIENT",
+    "DALBHARAT",
+    "DEEPAKNTR",
+    "DELHIVERY",
+    "ESCORTS",
+    "EXIDEIND",
+    "FEDERALBNK",
+    "FORTIS",
+    "GLENMARK",
+    "GMRINFRA",
+    "GNFC",
+    "GODFRYPHLP",
+    "GUJGASLTD",
+    "IDFCFIRSTB",
+    "IEX",
+    "IGL",
+    "INDIAMART",
+    "IPCALAB",
+    "IRFC",
+    "JUBLFOOD",
+    "KALYANKJIL",
+    "KEI",
+    "KPITTECH",
+    "LAURUSLABS",
+    "LICHSGFIN",
+    "LTIM",
+    "MANAPPURAM",
+    "MCX",
+    "METROPOLIS",
+    "MGL",
+    "MRF",
+    "NATIONALUM",
+    "NAVINFLUOR",
+    "NLCINDIA",
+    "OLECTRA",
+    "PEL",
+    "PHOENIXLTD",
+    "POLYMED",
+    "PRESTIGE",
+    "RAMCOCEM",
+    "RBLBANK",
+    "SONACOMS",
+    "STARHEALTH",
+    "SUMICHEM",
+    "SUNDARMFIN",
+    "SUNTV",
+    "TATACHEM",
+    "TATACOMM",
+    "TATAELXSI",
+    "THERMAX",
+    "TIMKEN",
+    "UBL",
+    "UNOMINDA",
+    "UPL",
+    "VBL",
+    "VINATIORGA",
+    "ZEEL"
 ]))
+
 
 # ============================================================
 # SETTINGS
 # ============================================================
 
-st.sidebar.header("⚙️ Scanner Settings")
+st.sidebar.header("⚙️ Zone Settings")
 
 account_capital = st.sidebar.number_input(
-    "Capital ₹",
-    min_value=1000,
-    value=25000,
-    step=1000
+    "Account Capital ₹",
+    min_value=1000.0,
+    value=25000.0,
+    step=1000.0
 )
 
 risk_pct = st.sidebar.number_input(
-    "Risk % per trade",
+    "Risk % per Trade",
     min_value=0.1,
     max_value=10.0,
     value=0.5,
@@ -117,7 +261,7 @@ risk_pct = st.sidebar.number_input(
 )
 
 target_rr = st.sidebar.number_input(
-    "Target R:R",
+    "Target RR",
     min_value=0.5,
     max_value=20.0,
     value=5.0,
@@ -128,30 +272,34 @@ atr_period = st.sidebar.number_input(
     "ATR Period",
     min_value=5,
     max_value=50,
-    value=14
+    value=14,
+    step=1
 )
 
 vol_sma_period = st.sidebar.number_input(
     "Volume SMA Period",
     min_value=5,
     max_value=100,
-    value=20
+    value=20,
+    step=1
 )
 
-st.sidebar.subheader("Zone Quality")
+st.sidebar.subheader("Base / Leg")
 
 min_base_count = st.sidebar.number_input(
-    "Min Base Candles",
+    "Min Base Count",
     min_value=1,
     max_value=3,
-    value=1
+    value=1,
+    step=1
 )
 
 max_base_count = st.sidebar.number_input(
-    "Max Base Candles",
+    "Max Base Count",
     min_value=1,
     max_value=3,
-    value=3
+    value=3,
+    step=1
 )
 
 leg_in_min_atr = st.sidebar.number_input(
@@ -162,7 +310,7 @@ leg_in_min_atr = st.sidebar.number_input(
     step=0.1
 )
 
-leg_in_base_mult = st.sidebar.number_input(
+leg_in_to_base_mult = st.sidebar.number_input(
     "Leg-In / Base Size",
     min_value=1.0,
     max_value=5.0,
@@ -171,12 +319,22 @@ leg_in_base_mult = st.sidebar.number_input(
 )
 
 leg_in_body_pct = st.sidebar.number_input(
-    "Leg-In Body %",
+    "Leg-In Min Body %",
     min_value=0.3,
     max_value=0.95,
     value=0.60,
     step=0.05
 )
+
+max_base_atr_mult = st.sidebar.number_input(
+    "Max Base TR / ATR",
+    min_value=0.5,
+    max_value=3.0,
+    value=1.0,
+    step=0.1
+)
+
+st.sidebar.subheader("Leg-Out")
 
 leg_out_tr_mult = st.sidebar.number_input(
     "Leg-Out TR Multiplier",
@@ -194,41 +352,59 @@ leg_out_min_ratio = st.sidebar.number_input(
     step=0.1
 )
 
-max_base_atr = st.sidebar.number_input(
-    "Max Base TR / ATR",
-    min_value=0.5,
-    max_value=3.0,
-    value=1.0,
+hq_leg_out_mult = st.sidebar.number_input(
+    "HQ Leg-Out / Leg-In",
+    min_value=1.0,
+    max_value=5.0,
+    value=2.0,
     step=0.1
 )
 
-min_clv = st.sidebar.number_input(
-    "Minimum CLV",
-    min_value=0.3,
+hq_leg_in_atr_mult = st.sidebar.number_input(
+    "HQ Leg-In ATR",
+    min_value=1.0,
+    max_value=5.0,
+    value=1.5,
+    step=0.1
+)
+
+max_wick_pct = st.sidebar.number_input(
+    "Max Wick %",
+    min_value=0.05,
+    max_value=0.80,
+    value=0.30,
+    step=0.05
+)
+
+min_clv_pct = st.sidebar.number_input(
+    "Min CLV %",
+    min_value=0.30,
     max_value=0.95,
     value=0.60,
     step=0.05
 )
 
-max_wick_pct = st.sidebar.number_input(
-    "Maximum Wick %",
-    min_value=0.1,
-    max_value=0.8,
-    value=0.30,
-    step=0.05
-)
+st.sidebar.subheader("Imbalance")
 
 use_imbalance = st.sidebar.checkbox(
-    "Use Imbalance Filter",
+    "Use Imbalance",
     value=True
 )
 
 max_imbalance_mult = st.sidebar.number_input(
-    "Max Imbalance Multiplier",
+    "Max Imbalance / ATR",
     min_value=0.5,
     max_value=3.0,
     value=1.0,
     step=0.1
+)
+
+reject_opposite_cover = st.sidebar.number_input(
+    "Reject Opposite Cover %",
+    min_value=0.1,
+    max_value=1.0,
+    value=0.50,
+    step=0.05
 )
 
 st.sidebar.subheader("Score")
@@ -236,21 +412,31 @@ st.sidebar.subheader("Score")
 min_valid_score = st.sidebar.number_input(
     "Minimum Valid Score",
     min_value=0,
-    max_value=100,
-    value=40
+    max_value=150,
+    value=40,
+    step=5
 )
 
 hq_score_threshold = st.sidebar.number_input(
-    "HQ Zone Score",
+    "HQ Score Threshold",
     min_value=50,
     max_value=150,
-    value=90
+    value=90,
+    step=5
+)
+
+leg_out_body_heavy_pct = st.sidebar.number_input(
+    "Leg-Out Body Heavy %",
+    min_value=0.40,
+    max_value=0.95,
+    value=0.60,
+    step=0.05
 )
 
 tested_retrace_pct = st.sidebar.number_input(
-    "Tested Retrace %",
-    min_value=0.1,
-    max_value=1.0,
+    "Tested Leg-Out Retrace %",
+    min_value=0.10,
+    max_value=1.00,
     value=0.50,
     step=0.05
 )
@@ -259,84 +445,206 @@ max_tested_count = st.sidebar.number_input(
     "Maximum Tests",
     min_value=1,
     max_value=10,
-    value=2
+    value=2,
+    step=1
 )
 
 sl_buffer_atr = st.sidebar.number_input(
-    "SL ATR Buffer",
+    "SL Buffer ATR",
     min_value=0.0,
     max_value=1.0,
     value=0.10,
     step=0.05
 )
 
-# ============================================================
-# TIMEFRAME SETTINGS
-# ============================================================
-
-TIMEFRAMES = {
-    "15M": "15m",
-    "1H": "1h",
-    "2H": "2h",
-    "3H": "3h",
-    "Daily": "1d",
-    "Weekly": "1wk"
-}
 
 # ============================================================
-# YAHOO PERIOD HELPERS
+# TIMEFRAMES
 # ============================================================
 
-def get_period_for_timeframe(tf):
-
-    if tf == "15M":
-        return "60d"
-
-    if tf == "1H":
-        return "730d"
-
-    if tf in ["2H", "3H"]:
-        return "730d"
-
-    if tf == "Daily":
-        return "5y"
-
-    if tf == "Weekly":
-        return "10y"
-
-    return "1y"
+TIMEFRAMES = [
+    "15M",
+    "1H",
+    "2H",
+    "3H",
+    "Daily",
+    "Weekly"
+]
 
 
 # ============================================================
-# DATA NORMALIZATION
+# HELPERS
 # ============================================================
 
-def normalize_df(df):
+def add_ns(symbol):
+    symbol = str(symbol).upper().strip()
 
+    if symbol.endswith(".NS"):
+        return symbol
+
+    return symbol + ".NS"
+
+
+def true_range(df):
+    previous_close = df["close"].shift(1)
+
+    tr1 = df["high"] - df["low"]
+    tr2 = (df["high"] - previous_close).abs()
+    tr3 = (df["low"] - previous_close).abs()
+
+    return pd.concat(
+        [tr1, tr2, tr3],
+        axis=1
+    ).max(axis=1)
+
+
+def rma(series, length):
+    return series.ewm(
+        alpha=1.0 / float(length),
+        adjust=False,
+        min_periods=length
+    ).mean()
+
+
+def candle_body(row):
+    return abs(
+        float(row["close"]) -
+        float(row["open"])
+    )
+
+
+def candle_range(row):
+    return (
+        float(row["high"]) -
+        float(row["low"])
+    )
+
+
+def body_pct(row):
+    rng = candle_range(row)
+
+    if rng <= 0:
+        return 0.0
+
+    return candle_body(row) / rng
+
+
+def is_bull(row):
+    return float(row["close"]) > float(row["open"])
+
+
+def is_bear(row):
+    return float(row["open"]) > float(row["close"])
+
+
+def clv_bull(row):
+    rng = candle_range(row)
+
+    if rng <= 0:
+        return 0.0
+
+    return (
+        float(row["close"]) -
+        float(row["low"])
+    ) / rng
+
+
+def clv_bear(row):
+    rng = candle_range(row)
+
+    if rng <= 0:
+        return 0.0
+
+    return (
+        float(row["high"]) -
+        float(row["close"])
+    ) / rng
+
+
+def total_wick_pct(row):
+    rng = candle_range(row)
+
+    if rng <= 0:
+        return 0.0
+
+    upper = (
+        float(row["high"]) -
+        max(
+            float(row["open"]),
+            float(row["close"])
+        )
+    )
+
+    lower = (
+        min(
+            float(row["open"]),
+            float(row["close"])
+        ) -
+        float(row["low"])
+    )
+
+    return (upper + lower) / rng
+
+
+def body_high(row):
+    return max(
+        float(row["open"]),
+        float(row["close"])
+    )
+
+
+def body_low(row):
+    return min(
+        float(row["open"]),
+        float(row["close"])
+    )
+
+
+# ============================================================
+# DATA CLEANING
+# ============================================================
+
+def clean_dataframe(df):
     if df is None or df.empty:
         return pd.DataFrame()
 
-    df = df.copy()
+    x = df.copy()
 
-    # Flatten MultiIndex
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [
-            str(col[0]).lower()
-            for col in df.columns
+    if isinstance(x.columns, pd.MultiIndex):
+        # Try to identify OHLC level.
+        level0 = [
+            str(v).lower()
+            for v in x.columns.get_level_values(0)
         ]
+
+        level1 = [
+            str(v).lower()
+            for v in x.columns.get_level_values(1)
+        ]
+
+        if "open" in level0:
+            x.columns = level0
+
+        elif "open" in level1:
+            x.columns = level1
+
+        else:
+            x.columns = [
+                str(c[0]).lower()
+                for c in x.columns
+            ]
+
     else:
-        df.columns = [
-            str(col).lower()
-            for col in df.columns
+        x.columns = [
+            str(c).lower()
+            for c in x.columns
         ]
 
-    rename_map = {
-        "adj close": "close",
-        "datetime": "datetime",
-        "date": "datetime"
-    }
-
-    df = df.rename(columns=rename_map)
+    if "adj close" in x.columns:
+        x = x.drop(
+            columns=["adj close"],
+            errors="ignore"
+        )
 
     required = [
         "open",
@@ -345,30 +653,30 @@ def normalize_df(df):
         "close"
     ]
 
-    for col in required:
-        if col not in df.columns:
+    for column in required:
+        if column not in x.columns:
             return pd.DataFrame()
 
-    if "volume" not in df.columns:
-        df["volume"] = 0
+    if "volume" not in x.columns:
+        x["volume"] = 0.0
 
-    df = df[
-        ["open", "high", "low", "close", "volume"]
+    x = x[
+        [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ]
     ].copy()
 
-    for col in [
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume"
-    ]:
-        df[col] = pd.to_numeric(
-            df[col],
+    for column in x.columns:
+        x[column] = pd.to_numeric(
+            x[column],
             errors="coerce"
         )
 
-    df = df.dropna(
+    x = x.dropna(
         subset=[
             "open",
             "high",
@@ -377,54 +685,115 @@ def normalize_df(df):
         ]
     )
 
-    return df
-
-
-# ============================================================
-# FETCH DATA
-# ============================================================
-
-@st.cache_data(ttl=300, show_spinner=False)
-def download_data(symbol, interval):
-
-    ticker = symbol.upper().strip()
-
-    if not ticker.endswith(".NS"):
-        ticker = ticker + ".NS"
-
-    period = get_period_for_timeframe(interval)
-
-    try:
-
-        df = yf.download(
-            ticker,
-            period=period,
-            interval=TIMEFRAMES[interval],
-            auto_adjust=False,
-            progress=False,
-            threads=False
+    if not isinstance(
+        x.index,
+        pd.DatetimeIndex
+    ):
+        x.index = pd.to_datetime(
+            x.index,
+            errors="coerce"
         )
 
-        if df is None or df.empty:
-            return pd.DataFrame()
+    x = x[
+        ~x.index.isna()
+    ]
 
-        df = normalize_df(df)
+    x = x.sort_index()
 
-        if df.empty:
-            return pd.DataFrame()
+    return x
 
-        # Datetime index
-        if not isinstance(df.index, pd.DatetimeIndex):
 
-            try:
-                df.index = pd.to_datetime(df.index)
-            except Exception:
-                pass
+# ============================================================
+# YAHOO DOWNLOAD
+# ============================================================
 
-        return df
+@st.cache_data(
+    ttl=300,
+    show_spinner=False
+)
+def download_batch(
+    symbols,
+    interval,
+    period
+):
+    if not symbols:
+        return {}
+
+    tickers = [
+        add_ns(symbol)
+        for symbol in symbols
+    ]
+
+    try:
+        data = yf.download(
+            tickers=tickers,
+            period=period,
+            interval=interval,
+            auto_adjust=False,
+            group_by="ticker",
+            threads=True,
+            progress=False
+        )
 
     except Exception:
-        return pd.DataFrame()
+        return {}
+
+    if data is None or data.empty:
+        return {}
+
+    result = {}
+
+    # Multi-symbol response
+    if isinstance(
+        data.columns,
+        pd.MultiIndex
+    ):
+
+        first_level = set(
+            str(x)
+            for x in data.columns.get_level_values(0)
+        )
+
+        second_level = set(
+            str(x)
+            for x in data.columns.get_level_values(1)
+        )
+
+        for original in symbols:
+
+            ticker = add_ns(original)
+
+            try:
+                if ticker in first_level:
+                    part = data[ticker]
+
+                elif ticker in second_level:
+                    part = data.xs(
+                        ticker,
+                        axis=1,
+                        level=1
+                    )
+
+                else:
+                    continue
+
+                part = clean_dataframe(part)
+
+                if not part.empty:
+                    result[original] = part
+
+            except Exception:
+                continue
+
+    else:
+
+        if len(symbols) == 1:
+            part = clean_dataframe(data)
+
+            if not part.empty:
+                result[symbols[0]] = part
+
+    return result
 
 
 # ============================================================
@@ -432,21 +801,15 @@ def download_data(symbol, interval):
 # ============================================================
 
 def resample_hourly(df, hours):
-
     if df is None or df.empty:
         return pd.DataFrame()
 
     x = df.copy()
 
-    if not isinstance(x.index, pd.DatetimeIndex):
-        x.index = pd.to_datetime(x.index)
-
     x = x.sort_index()
 
-    rule = f"{hours}h"
-
     result = x.resample(
-        rule,
+        f"{hours}h",
         label="right",
         closed="right"
     ).agg({
@@ -470,207 +833,75 @@ def resample_hourly(df, hours):
 
 
 # ============================================================
-# TRUE RANGE
+# PREPARE ALL TIMEFRAMES
 # ============================================================
 
-def true_range_series(df):
-
-    prev_close = df["close"].shift(1)
-
-    tr1 = df["high"] - df["low"]
-    tr2 = (df["high"] - prev_close).abs()
-    tr3 = (df["low"] - prev_close).abs()
-
-    return pd.concat(
-        [tr1, tr2, tr3],
-        axis=1
-    ).max(axis=1)
-
-
-# ============================================================
-# WILDER RMA
-# ============================================================
-
-def rma(series, length):
-
-    return series.ewm(
-        alpha=1 / length,
-        adjust=False,
-        min_periods=length
-    ).mean()
-
-
-# ============================================================
-# CANDLE HELPERS
-# ============================================================
-
-def candle_body(row):
-
-    return abs(
-        float(row["close"]) -
-        float(row["open"])
-    )
-
-
-def candle_range(row):
-
-    return (
-        float(row["high"]) -
-        float(row["low"])
-    )
-
-
-def body_pct(row):
-
-    rng = candle_range(row)
-
-    if rng <= 0:
-        return 0
-
-    return candle_body(row) / rng
-
-
-def clv(row):
-
-    rng = candle_range(row)
-
-    if rng <= 0:
-        return 0.5
-
-    return (
-        float(row["close"]) -
-        float(row["low"])
-    ) / rng
-
-
-def is_bull(row):
-
-    return float(row["close"]) > float(row["open"])
-
-
-def is_bear(row):
-
-    return float(row["close"]) < float(row["open"])
-
-
-# ============================================================
-# ZONE STATE
-# ============================================================
-
-def get_zone_state(
-    df,
-    proximal,
-    distal,
-    zone_type,
-    created_index,
-    tested_retrace=tested_retrace_pct
+def prepare_symbol_data(
+    symbol,
+    data_15m,
+    data_1h,
+    data_daily,
+    data_weekly
 ):
+    result = {}
 
-    if df.empty:
-        return "Fresh", 0
+    if symbol in data_15m:
+        result["15M"] = data_15m[symbol]
 
-    try:
-        start_pos = df.index.get_loc(created_index)
+    if symbol in data_1h:
 
-    except Exception:
-        start_pos = max(0, len(df) - 50)
+        df1h = data_1h[symbol]
 
-    future = df.iloc[start_pos + 1:]
+        result["1H"] = df1h
 
-    if future.empty:
-        return "Fresh", 0
+        df2h = resample_hourly(
+            df1h,
+            2
+        )
 
-    touches = 0
+        if not df2h.empty:
+            result["2H"] = df2h
 
-    zone_size = abs(
-        float(proximal) -
-        float(distal)
-    )
+        df3h = resample_hourly(
+            df1h,
+            3
+        )
 
-    if zone_size <= 0:
-        return "Fresh", 0
+        if not df3h.empty:
+            result["3H"] = df3h
 
-    for _, row in future.iterrows():
+    if symbol in data_daily:
+        result["Daily"] = data_daily[symbol]
 
-        high = float(row["high"])
-        low = float(row["low"])
-        close = float(row["close"])
+    if symbol in data_weekly:
+        result["Weekly"] = data_weekly[symbol]
 
-        # ---------------- DEMAND ----------------
-
-        if zone_type == "Demand":
-
-            if low <= proximal and high >= distal:
-
-                touches += 1
-
-            # Broken below distal
-            if close < distal:
-                return "Broken", touches
-
-        # ---------------- SUPPLY ----------------
-
-        else:
-
-            if high >= distal and low <= proximal:
-
-                touches += 1
-
-            # Broken above distal
-            if close > distal:
-                return "Broken", touches
-
-    if touches == 0:
-        return "Fresh", 0
-
-    if touches <= max_tested_count:
-        return "Tested", touches
-
-    return "Broken", touches
+    return result
 
 
 # ============================================================
-# POSITION SIZE
+# ZONE SCANNER
 # ============================================================
 
-def calculate_position_size(entry, sl):
-
-    risk_money = (
-        float(account_capital) *
-        float(risk_pct) / 100
-    )
-
-    risk_per_share = abs(
-        float(entry) -
-        float(sl)
-    )
-
-    if risk_per_share <= 0:
-        return 0
-
-    qty = int(
-        risk_money /
-        risk_per_share
-    )
-
-    return max(qty, 0)
-
-
-# ============================================================
-# SCAN ONE DATAFRAME
-# ============================================================
-
-def run_scan(df, symbol, timeframe):
-
+def scan_dataframe(
+    df,
+    symbol,
+    timeframe
+):
     if df is None or df.empty:
         return []
 
     x = df.copy()
 
-    if len(x) < 50:
+    minimum_bars = max(
+        60,
+        int(atr_period) + 20
+    )
+
+    if len(x) < minimum_bars:
         return []
 
-    x["TR"] = true_range_series(x)
+    x["TR"] = true_range(x)
 
     x["ATR"] = rma(
         x["TR"],
@@ -679,49 +910,178 @@ def run_scan(df, symbol, timeframe):
 
     x["VOL_SMA"] = (
         x["volume"]
-        .rolling(int(vol_sma_period))
+        .rolling(
+            int(vol_sma_period)
+        )
         .mean()
     )
 
     zones = []
 
-    # Need enough candles
+    min_base = max(
+        1,
+        min(
+            int(min_base_count),
+            int(max_base_count)
+        )
+    )
+
+    max_base = min(
+        3,
+        max(
+            min_base,
+            int(max_base_count)
+        )
+    )
+
+    # --------------------------------------------------------
+    # i = LEG-OUT
+    # base = previous candles
+    # leg-in = candle before base
+    # --------------------------------------------------------
+
     for i in range(
-        max(atr_period, vol_sma_period) + 3,
-        len(x) - 1
+        max(
+            int(atr_period) + 5,
+            max_base + 5
+        ),
+        len(x)
     ):
 
-        current = x.iloc[i]
+        leg_out = x.iloc[i]
 
-        atr = float(current["ATR"])
-
-        if not np.isfinite(atr) or atr <= 0:
+        if not np.isfinite(
+            leg_out["ATR"]
+        ):
             continue
 
-        # ====================================================
-        # TRY BASES 1 -> 3
-        # ====================================================
+        zone_found = False
 
-        for base_count in range(
-            int(min_base_count),
-            int(max_base_count) + 1
+        for b_count in range(
+            min_base,
+            max_base + 1
         ):
 
-            base_start = i - base_count
+            leg_in_idx = i - b_count - 1
 
-            if base_start < 2:
+            prev_idx = leg_in_idx - 1
+
+            base_start = i - b_count
+            base_end = i
+
+            if leg_in_idx < 1:
                 continue
 
-            leg_in = x.iloc[base_start - 1]
-            base = x.iloc[
-                base_start:i
+            if base_start < 0:
+                continue
+
+            leg_in = x.iloc[
+                leg_in_idx
             ]
 
-            leg_out = x.iloc[i]
+            base = x.iloc[
+                base_start:base_end
+            ]
 
-            # ------------------------------------------------
-            # Base OHLC
-            # ------------------------------------------------
+            if len(base) != b_count:
+                continue
+
+            # =================================================
+            # LEG-IN
+            # =================================================
+
+            leg_in_tr = float(
+                leg_in["TR"]
+            )
+
+            leg_in_atr = float(
+                leg_in["ATR"]
+            )
+
+            if not np.isfinite(
+                leg_in_atr
+            ) or leg_in_atr <= 0:
+                continue
+
+            if candle_range(
+                leg_in
+            ) <= 0:
+                continue
+
+            if body_pct(
+                leg_in
+            ) < float(leg_in_body_pct):
+                continue
+
+            leg_in_bull = is_bull(
+                leg_in
+            )
+
+            leg_in_bear = is_bear(
+                leg_in
+            )
+
+            if not (
+                leg_in_bull or
+                leg_in_bear
+            ):
+                continue
+
+            # =================================================
+            # OPPOSITE COVER REJECTION
+            # =================================================
+
+            if prev_idx >= 0:
+
+                previous = x.iloc[
+                    prev_idx
+                ]
+
+                opposite = (
+                    leg_in_bull and
+                    is_bear(previous)
+                ) or (
+                    leg_in_bear and
+                    is_bull(previous)
+                )
+
+                if opposite:
+
+                    overlap_high = min(
+                        body_high(previous),
+                        float(leg_in["high"])
+                    )
+
+                    overlap_low = max(
+                        body_low(previous),
+                        float(leg_in["low"])
+                    )
+
+                    overlap = max(
+                        0.0,
+                        overlap_high -
+                        overlap_low
+                    )
+
+                    leg_in_range = candle_range(
+                        leg_in
+                    )
+
+                    cover_pct = (
+                        overlap /
+                        leg_in_range
+                        if leg_in_range > 0
+                        else 0
+                    )
+
+                    if cover_pct >= float(
+                        reject_opposite_cover
+                    ):
+                        continue
+
+            # =================================================
+            # BASE
+            # =================================================
 
             base_high = float(
                 base["high"].max()
@@ -731,108 +1091,99 @@ def run_scan(df, symbol, timeframe):
                 base["low"].min()
             )
 
-            base_tr_max = float(
+            max_base_tr = float(
                 base["TR"].max()
             )
 
-            if base_high <= base_low:
+            if max_base_tr <= 0:
                 continue
 
-            # ------------------------------------------------
-            # Base Quality
-            # ------------------------------------------------
+            base_valid = True
 
-            if base_tr_max > (
-                float(max_base_atr) * atr
-            ):
-                continue
+            for _, candle in base.iterrows():
 
-            # Base body should be relatively small
-            base_ok = True
+                atr_b = float(
+                    candle["ATR"]
+                )
 
-            for _, b in base.iterrows():
-
-                br = candle_range(b)
-
-                if br <= 0:
-                    base_ok = False
+                if not np.isfinite(
+                    atr_b
+                ) or atr_b <= 0:
+                    base_valid = False
                     break
 
-                bp = body_pct(b)
-
-                if bp > 0.75:
-                    base_ok = False
+                if float(
+                    candle["TR"]
+                ) > (
+                    float(max_base_atr_mult) *
+                    atr_b
+                ):
+                    base_valid = False
                     break
 
-            if not base_ok:
+            if not base_valid:
                 continue
 
-            # ------------------------------------------------
-            # LEG-IN
-            # ------------------------------------------------
+            # =================================================
+            # LEG-IN SIZE VS BASE
+            # =================================================
 
-            leg_in_tr = float(
-                leg_in["TR"]
-            )
-
-            leg_in_body = candle_body(
-                leg_in
-            )
-
-            leg_in_bp = body_pct(
-                leg_in
+            effective_base_mult = (
+                1.5
+                if b_count == 1
+                else float(leg_in_to_base_mult)
             )
 
             if leg_in_tr < (
-                float(leg_in_min_atr) * atr
+                effective_base_mult *
+                max_base_tr
             ):
                 continue
 
-            if leg_in_bp < float(
-                leg_in_body_pct
+            if leg_in_tr < (
+                float(leg_in_min_atr) *
+                leg_in_atr
             ):
                 continue
 
-            # ------------------------------------------------
-            # LEG-IN DIRECTION
-            # ------------------------------------------------
-
-            if is_bull(leg_in):
-                direction = "Bullish"
-
-            elif is_bear(leg_in):
-                direction = "Bearish"
-
-            else:
-                continue
-
-            # ------------------------------------------------
-            # LEG-IN SIZE VS BASE
-            # ------------------------------------------------
-
-            base_avg_range = float(
-                base["TR"].mean()
-            )
-
-            if base_avg_range <= 0:
-                continue
-
-            leg_in_size_ok = (
-                leg_in_tr >=
-                float(leg_in_base_mult) *
-                base_avg_range
-            )
-
-            # ------------------------------------------------
+            # =================================================
             # LEG-OUT
-            # ------------------------------------------------
+            # =================================================
 
             leg_out_tr = float(
                 leg_out["TR"]
             )
 
+            leg_out_atr = float(
+                leg_out["ATR"]
+            )
+
+            if not np.isfinite(
+                leg_out_atr
+            ) or leg_out_atr <= 0:
+                continue
+
+            leg_out_bull = is_bull(
+                leg_out
+            )
+
+            leg_out_bear = is_bear(
+                leg_out
+            )
+
+            if not (
+                leg_out_bull or
+                leg_out_bear
+            ):
+                continue
+
+            # =================================================
+            # EXPLOSIVE LEG-OUT
+            # =================================================
+
             if leg_out_tr < (
-                float(leg_out_tr_mult) * atr
+                float(leg_out_tr_mult) *
+                leg_out_atr
             ):
                 continue
 
@@ -842,210 +1193,368 @@ def run_scan(df, symbol, timeframe):
             ):
                 continue
 
-            # ------------------------------------------------
-            # LEG-OUT DIRECTION
-            # ------------------------------------------------
+            # =================================================
+            # WICK
+            # =================================================
 
-            if direction == "Bullish":
-
-                if not is_bull(leg_out):
-                    continue
-
-            else:
-
-                if not is_bear(leg_out):
-                    continue
-
-            # ------------------------------------------------
-            # CLV
-            # ------------------------------------------------
-
-            leg_out_clv = clv(
+            if total_wick_pct(
                 leg_out
-            )
-
-            if direction == "Bullish":
-
-                if leg_out_clv < float(min_clv):
-                    continue
-
-            else:
-
-                if leg_out_clv > (
-                    1 - float(min_clv)
-                ):
-                    continue
-
-            # ------------------------------------------------
-            # WICK FILTER
-            # ------------------------------------------------
-
-            lo = float(
-                leg_out["low"]
-            )
-
-            hi = float(
-                leg_out["high"]
-            )
-
-            op = float(
-                leg_out["open"]
-            )
-
-            cl = float(
-                leg_out["close"]
-            )
-
-            rng = hi - lo
-
-            if rng <= 0:
+            ) > float(max_wick_pct):
                 continue
 
-            if direction == "Bullish":
-
-                upper_wick = hi - max(op, cl)
-
-                wick_pct = (
-                    upper_wick / rng
-                )
-
-            else:
-
-                lower_wick = min(op, cl) - lo
-
-                wick_pct = (
-                    lower_wick / rng
-                )
-
-            if wick_pct > float(max_wick_pct):
-                continue
-
-            # ------------------------------------------------
+            # =================================================
             # VOLUME
-            # ------------------------------------------------
+            # =================================================
 
-            vol = float(
+            leg_out_volume = float(
                 leg_out["volume"]
             )
 
-            vol_sma = float(
-                leg_out["VOL_SMA"]
-            ) if np.isfinite(
-                leg_out["VOL_SMA"]
-            ) else 0
-
-            volume_ok = (
-                vol_sma > 0 and
-                vol > vol_sma
+            leg_in_volume = float(
+                leg_in["volume"]
             )
 
-            # ------------------------------------------------
-            # IMBALANCE
-            # ------------------------------------------------
+            passes_volume = (
+                leg_out_volume >
+                leg_in_volume
+            )
 
-            imbalance_ok = True
+            if not passes_volume:
+                continue
 
-            if use_imbalance:
+            # =================================================
+            # CLV
+            # =================================================
 
-                if direction == "Bullish":
+            if leg_out_bull:
 
-                    gap = (
-                        float(leg_out["low"]) -
-                        float(leg_in["high"])
-                    )
-
-                else:
-
-                    gap = (
-                        float(leg_in["low"]) -
-                        float(leg_out["high"])
-                    )
-
-                imbalance_ok = (
-                    gap > 0 and
-                    gap <=
-                    float(max_imbalance_mult) *
-                    atr
+                leg_out_clv = clv_bull(
+                    leg_out
                 )
 
-            # ------------------------------------------------
-            # PATTERN TYPE
-            # ------------------------------------------------
-
-            base_first = base.iloc[0]
-
-            base_bull = is_bull(
-                base_first
-            )
-
-            base_bear = is_bear(
-                base_first
-            )
-
-            if direction == "Bullish":
-
-                if base_bull:
-                    pattern = "RBR"
-                else:
-                    pattern = "DBR"
-
-                zone_type = "Demand"
+                if leg_out_clv < float(
+                    min_clv_pct
+                ):
+                    continue
 
             else:
 
-                if base_bear:
-                    pattern = "DBD"
+                leg_out_clv = clv_bear(
+                    leg_out
+                )
+
+                if leg_out_clv < float(
+                    min_clv_pct
+                ):
+                    continue
+
+            # =================================================
+            # IMBALANCE / GAP
+            # =================================================
+
+            has_imbalance = True
+            genuine_gap = False
+            gap_size = 0.0
+
+            if use_imbalance:
+
+                if leg_out_bull:
+
+                    genuine_gap = (
+                        float(leg_out["low"]) >
+                        base_high
+                    )
+
+                    gap_condition = (
+                        genuine_gap or
+                        float(leg_out["close"]) >
+                        float(leg_in["high"])
+                    )
+
+                    gap_size = max(
+                        0.0,
+                        float(
+                            leg_out["low"]
+                        ) -
+                        base_high
+                    )
+
                 else:
-                    pattern = "RBD"
 
-                zone_type = "Supply"
+                    genuine_gap = (
+                        float(leg_out["high"]) <
+                        base_low
+                    )
 
-            # ------------------------------------------------
+                    gap_condition = (
+                        genuine_gap or
+                        float(leg_out["close"]) <
+                        float(leg_in["low"])
+                    )
+
+                    gap_size = max(
+                        0.0,
+                        base_low -
+                        float(leg_out["high"])
+                    )
+
+                has_imbalance = (
+                    gap_condition
+                )
+
+                if genuine_gap:
+
+                    if gap_size > (
+                        float(max_imbalance_mult) *
+                        leg_in_tr
+                    ):
+                        continue
+
+            if not has_imbalance:
+                continue
+
+            # =================================================
+            # ENGULF CHECK
+            # =================================================
+
+            leg_out_body_high = body_high(
+                leg_out
+            )
+
+            leg_out_body_low = body_low(
+                leg_out
+            )
+
+            body_engulfs_base = (
+                leg_out_body_low <=
+                base_low and
+                leg_out_body_high >=
+                base_high
+            )
+
+            if body_engulfs_base and not genuine_gap:
+                continue
+
+            # =================================================
+            # PATTERN
+            # =================================================
+
+            leg_in_bull_clv = (
+                (
+                    float(leg_in["close"]) -
+                    float(leg_in["low"])
+                ) /
+                candle_range(leg_in)
+            )
+
+            leg_in_bear_clv = (
+                (
+                    float(leg_in["high"]) -
+                    float(leg_in["close"])
+                ) /
+                candle_range(leg_in)
+            )
+
+            is_rbr = (
+                leg_in_bull and
+                leg_in_bull_clv >= float(
+                    min_clv_pct
+                ) and
+                leg_out_bull
+            )
+
+            is_dbr = (
+                leg_in_bear and
+                leg_in_bear_clv >= float(
+                    min_clv_pct
+                ) and
+                leg_out_bull
+            )
+
+            is_dbd = (
+                leg_in_bear and
+                leg_in_bear_clv >= float(
+                    min_clv_pct
+                ) and
+                leg_out_bear
+            )
+
+            is_rbd = (
+                leg_in_bull and
+                leg_in_bull_clv >= float(
+                    min_clv_pct
+                ) and
+                leg_out_bear
+            )
+
+            if is_rbr:
+                pattern = "RBR"
+
+            elif is_dbr:
+                pattern = "DBR"
+
+            elif is_dbd:
+                pattern = "DBD"
+
+            elif is_rbd:
+                pattern = "RBD"
+
+            else:
+                continue
+
+            zone_type = (
+                "Demand"
+                if leg_out_bull
+                else "Supply"
+            )
+
+            category = (
+                "Continuation"
+                if pattern in ["RBR", "DBD"]
+                else "Reversal"
+            )
+
+            # =================================================
             # SCORE
-            # ------------------------------------------------
+            # =================================================
 
-            score = 10
+            score = 0
 
-            if base_count == 1:
+            if b_count == 1:
                 score += 15
 
             if leg_in_tr >= (
-                1.5 * atr
+                float(hq_leg_in_atr_mult) *
+                leg_in_atr
             ):
                 score += 10
 
             if leg_out_tr >= (
+                float(hq_leg_out_mult) *
+                leg_in_tr
+            ):
+                score += 15
+
+            if (
+                leg_in_tr >=
+                2.0 * max_base_tr
+                and
+                leg_out_tr >=
                 2.0 * leg_in_tr
             ):
                 score += 15
 
-            if leg_in_size_ok:
-                score += 15
+            volume_sma = float(
+                leg_out["VOL_SMA"]
+            )
 
-            if volume_ok:
-                score += 10
+            if np.isfinite(
+                volume_sma
+            ) and volume_sma > 0:
 
-            if direction == "Bullish":
-                strong_close = (
-                    leg_out_clv >= 0.75
+                if leg_out_volume > volume_sma:
+                    score += 10
+
+            if leg_out_bull:
+
+                body_position = (
+                    float(leg_out["close"]) -
+                    float(leg_out["low"])
+                ) / candle_range(
+                    leg_out
                 )
+
+                own_body_pct = body_pct(
+                    leg_out
+                )
+
+                if pattern == "DBR":
+
+                    if (
+                        body_position >= 0.80
+                        or
+                        own_body_pct >=
+                        float(
+                            leg_out_body_heavy_pct
+                        )
+                    ):
+                        score += 15
+
+                elif body_position >= 0.80:
+
+                    score += 15
+
             else:
-                strong_close = (
-                    leg_out_clv <= 0.25
+
+                body_position = (
+                    float(leg_out["high"]) -
+                    float(leg_out["close"])
+                ) / candle_range(
+                    leg_out
                 )
 
-            if strong_close:
-                score += 15
+                if body_position >= 0.80:
+                    score += 15
 
-            if base_bull != base_bear:
+            # Opposite-color base
+            opposite_base = False
+
+            for _, base_candle in base.iterrows():
+
+                if (
+                    leg_out_bull and
+                    is_bear(base_candle)
+                ):
+                    opposite_base = True
+                    break
+
+                if (
+                    leg_out_bear and
+                    is_bull(base_candle)
+                ):
+                    opposite_base = True
+                    break
+
+            if opposite_base:
                 score += 10
 
-            if imbalance_ok:
+            # Base quality bonus from Pine
+            score += 10
+
+            if genuine_gap:
                 score += 10
 
-            # ------------------------------------------------
-            # ZONE
-            # ------------------------------------------------
+                # Overnight gap approximation
+                if i > 0:
+
+                    previous_time = x.index[
+                        i - 1
+                    ]
+
+                    current_time = x.index[i]
+
+                    gap_hours = (
+                        current_time -
+                        previous_time
+                    ).total_seconds() / 3600.0
+
+                    if gap_hours > 20:
+                        score += 15
+
+            if score < int(
+                min_valid_score
+            ):
+                continue
+
+            is_hq = (
+                score >= int(
+                    hq_score_threshold
+                )
+            )
+
+            # =================================================
+            # ZONE LEVELS
+            # =================================================
 
             if zone_type == "Demand":
 
@@ -1055,7 +1564,7 @@ def run_scan(df, symbol, timeframe):
                 sl = (
                     distal -
                     float(sl_buffer_atr) *
-                    atr
+                    leg_out_atr
                 )
 
                 entry = proximal
@@ -1071,6 +1580,16 @@ def run_scan(df, symbol, timeframe):
                     risk
                 )
 
+                # Pine's tested leg-out level
+                test_level = (
+                    float(leg_out["high"]) -
+                    float(tested_retrace_pct) *
+                    (
+                        float(leg_out["high"]) -
+                        float(leg_out["low"])
+                    )
+                )
+
             else:
 
                 proximal = base_low
@@ -1079,7 +1598,7 @@ def run_scan(df, symbol, timeframe):
                 sl = (
                     distal +
                     float(sl_buffer_atr) *
-                    atr
+                    leg_out_atr
                 )
 
                 entry = proximal
@@ -1095,85 +1614,1108 @@ def run_scan(df, symbol, timeframe):
                     risk
                 )
 
-            # ------------------------------------------------
-            # SCORE FILTER
-            # ------------------------------------------------
+                test_level = (
+                    float(leg_out["low"]) +
+                    float(tested_retrace_pct) *
+                    (
+                        float(leg_out["high"]) -
+                        float(leg_out["low"])
+                    )
+                )
 
-            if score < int(min_valid_score):
-                continue
-
-            hq = (
-                "HQ"
-                if score >= int(hq_score_threshold)
-                else "Standard"
-            )
-
-            # ------------------------------------------------
-            # STATE
-            # ------------------------------------------------
-
-            created_index = x.index[i]
-
-            state, touches = get_zone_state(
-                x,
-                proximal,
-                distal,
-                zone_type,
-                created_index
-            )
-
-            # ------------------------------------------------
-            # POSITION SIZE
-            # ------------------------------------------------
-
-            qty = calculate_position_size(
-                entry,
-                sl
-            )
-
-            # ------------------------------------------------
+            # =================================================
             # CURRENT PRICE
-            # ------------------------------------------------
+            # =================================================
 
             current_price = float(
                 x["close"].iloc[-1]
             )
 
-            # Distance to zone
-            if current_price < min(
+            zone_top = max(
                 proximal,
                 distal
-            ):
+            )
+
+            zone_bottom = min(
+                proximal,
+                distal
+            )
+
+            if current_price < zone_bottom:
 
                 distance = (
-                    min(proximal, distal) -
+                    zone_bottom -
                     current_price
                 )
 
-            elif current_price > max(
-                proximal,
-                distal
-            ):
+            elif current_price > zone_top:
 
                 distance = (
                     current_price -
-                    max(proximal, distal)
+                    zone_top
                 )
 
             else:
 
-                distance = 0
+                distance = 0.0
 
             distance_pct = (
                 distance /
                 current_price *
-                100
+                100.0
                 if current_price > 0
-                else 0
+                else 0.0
             )
 
-            # ------------------------------------------------
-            # ENTRY STATUS
-            # ------------------------------------------------
+            # =================================================
+            # STATE
+            # =================================================
 
-            if zone_type == "
+            future = x.iloc[
+                i + 1:
+            ]
+
+            touch_count = 0
+            state = "Fresh"
+
+            for _, future_candle in future.iterrows():
+
+                future_high = float(
+                    future_candle["high"]
+                )
+
+                future_low = float(
+                    future_candle["low"]
+                )
+
+                if zone_type == "Demand":
+
+                    if future_low <= distal:
+
+                        state = "Broken"
+                        break
+
+                    if future_low <= test_level:
+
+                        touch_count += 1
+
+                else:
+
+                    if future_high >= distal:
+
+                        state = "Broken"
+                        break
+
+                    if future_high >= test_level:
+
+                        touch_count += 1
+
+            if state != "Broken":
+
+                if touch_count == 0:
+
+                    state = "Fresh"
+
+                elif touch_count <= int(
+                    max_tested_count
+                ):
+
+                    state = "Tested"
+
+                else:
+
+                    state = "Broken"
+
+            # =================================================
+            # ENTRY STATUS
+            # =================================================
+
+            if zone_type == "Demand":
+
+                if (
+                    distal <=
+                    current_price <=
+                    proximal
+                ):
+                    entry_status = "IN ZONE"
+
+                elif (
+                    current_price < proximal
+                ):
+                    entry_status = "NEAR"
+
+                else:
+                    entry_status = "ABOVE"
+
+            else:
+
+                if (
+                    proximal <=
+                    current_price <=
+                    distal
+                ):
+                    entry_status = "IN ZONE"
+
+                elif (
+                    current_price > proximal
+                ):
+                    entry_status = "NEAR"
+
+                else:
+                    entry_status = "BELOW"
+
+            # =================================================
+            # POSITION SIZE
+            # =================================================
+
+            risk_money = (
+                float(account_capital) *
+                float(risk_pct) /
+                100.0
+            )
+
+            risk_per_share = abs(
+                entry - sl
+            )
+
+            if risk_per_share > 0:
+
+                quantity = int(
+                    risk_money /
+                    risk_per_share
+                )
+
+            else:
+
+                quantity = 0
+
+            zones.append({
+                "Symbol": symbol,
+                "Timeframe": timeframe,
+                "Created": x.index[i],
+                "Pattern": pattern,
+                "Category": category,
+                "Type": zone_type,
+                "Direction": (
+                    "Bullish"
+                    if zone_type == "Demand"
+                    else "Bearish"
+                ),
+                "Score": int(score),
+                "HQ": (
+                    "HQ"
+                    if is_hq
+                    else "Standard"
+                ),
+                "State": state,
+                "Touches": int(touch_count),
+                "Current": current_price,
+                "Proximal": proximal,
+                "Distal": distal,
+                "Entry": entry,
+                "SL": sl,
+                "TP": tp,
+                "Risk": risk_per_share,
+                "Qty": quantity,
+                "Distance": distance,
+                "DistancePct": distance_pct,
+                "EntryStatus": entry_status,
+                "Gap": genuine_gap
+            })
+
+            zone_found = True
+
+            # Same as Pine:
+            # only strongest base for this leg-out
+            break
+
+        if zone_found:
+            continue
+
+    return zones
+
+
+# ============================================================
+# DEDUPLICATION
+# ============================================================
+
+def deduplicate_zones(zones):
+
+    if not zones:
+        return []
+
+    df = pd.DataFrame(zones)
+
+    if df.empty:
+        return []
+
+    df = df.sort_values(
+        [
+            "Symbol",
+            "Timeframe",
+            "Score",
+            "Created"
+        ],
+        ascending=[
+            True,
+            True,
+            False,
+            False
+        ]
+    )
+
+    keep = []
+
+    for _, row in df.iterrows():
+
+        duplicate = False
+
+        for old in keep:
+
+            if (
+                row["Symbol"] ==
+                old["Symbol"]
+                and
+                row["Timeframe"] ==
+                old["Timeframe"]
+                and
+                row["Type"] ==
+                old["Type"]
+            ):
+
+                top1 = max(
+                    row["Proximal"],
+                    row["Distal"]
+                )
+
+                bottom1 = min(
+                    row["Proximal"],
+                    row["Distal"]
+                )
+
+                top2 = max(
+                    old["Proximal"],
+                    old["Distal"]
+                )
+
+                bottom2 = min(
+                    old["Proximal"],
+                    old["Distal"]
+                )
+
+                overlap = (
+                    min(top1, top2) >=
+                    max(bottom1, bottom2)
+                )
+
+                if overlap:
+
+                    duplicate = True
+                    break
+
+        if not duplicate:
+            keep.append(row)
+
+    return keep
+
+
+# ============================================================
+# FORMAT
+# ============================================================
+
+def format_result(df):
+
+    if df.empty:
+        return df
+
+    out = df.copy()
+
+    numeric_columns = [
+        "Current",
+        "Proximal",
+        "Distal",
+        "Entry",
+        "SL",
+        "TP",
+        "Risk",
+        "Distance",
+        "DistancePct"
+    ]
+
+    for column in numeric_columns:
+
+        if column in out.columns:
+
+            out[column] = pd.to_numeric(
+                out[column],
+                errors="coerce"
+            ).round(2)
+
+    return out
+
+
+# ============================================================
+# SCAN ENGINE
+# ============================================================
+
+def scan_universe(
+    symbols,
+    progress_callback=None
+):
+
+    # --------------------------------------------------------
+    # Download only four data sets:
+    # 15M / 1H / Daily / Weekly
+    #
+    # 2H and 3H are generated from 1H.
+    # --------------------------------------------------------
+
+    data_15m = download_batch(
+        symbols,
+        "15m",
+        "60d"
+    )
+
+    if progress_callback:
+        progress_callback(
+            0.20,
+            "15M data downloaded"
+        )
+
+    data_1h = download_batch(
+        symbols,
+        "1h",
+        "730d"
+    )
+
+    if progress_callback:
+        progress_callback(
+            0.40,
+            "1H data downloaded"
+        )
+
+    data_daily = download_batch(
+        symbols,
+        "1d",
+        "5y"
+    )
+
+    if progress_callback:
+        progress_callback(
+            0.60,
+            "Daily data downloaded"
+        )
+
+    data_weekly = download_batch(
+        symbols,
+        "1wk",
+        "10y"
+    )
+
+    if progress_callback:
+        progress_callback(
+            0.70,
+            "Weekly data downloaded"
+        )
+
+    all_results = []
+
+    total = len(symbols)
+
+    for count, symbol in enumerate(
+        symbols,
+        start=1
+    ):
+
+        timeframe_data = prepare_symbol_data(
+            symbol,
+            data_15m,
+            data_1h,
+            data_daily,
+            data_weekly
+        )
+
+        symbol_zones = []
+
+        for timeframe in TIMEFRAMES:
+
+            if timeframe not in timeframe_data:
+                continue
+
+            zones = scan_dataframe(
+                timeframe_data[timeframe],
+                symbol,
+                timeframe
+            )
+
+            symbol_zones.extend(
+                zones
+            )
+
+        symbol_zones = deduplicate_zones(
+            symbol_zones
+        )
+
+        all_results.extend(
+            symbol_zones
+        )
+
+        if progress_callback:
+
+            progress = (
+                0.70 +
+                (
+                    count /
+                    max(total, 1)
+                ) *
+                0.30
+            )
+
+            progress_callback(
+                progress,
+                f"Scanning {symbol} "
+                f"({count}/{total})"
+            )
+
+    return all_results
+
+
+# ============================================================
+# SIDEBAR
+# ============================================================
+
+st.sidebar.divider()
+
+st.sidebar.header("🔎 Scan Mode")
+
+scan_mode = st.sidebar.radio(
+    "Mode",
+    [
+        "NIFTY Universe",
+        "Single Stock"
+    ]
+)
+
+
+# ============================================================
+# NIFTY SCAN
+# ============================================================
+
+if scan_mode == "NIFTY Universe":
+
+    st.sidebar.write(
+        f"Universe: {len(NIFTY200)} symbols"
+    )
+
+    scan_count = st.sidebar.number_input(
+        "Stocks to Scan",
+        min_value=1,
+        max_value=len(NIFTY200),
+        value=min(
+            50,
+            len(NIFTY200)
+        ),
+        step=10
+    )
+
+    selected_symbols = NIFTY200[
+        :int(scan_count)
+    ]
+
+    scan_button = st.sidebar.button(
+        "🚀 Run Zone Scan",
+        use_container_width=True
+    )
+
+    if scan_button:
+
+        progress_bar = st.progress(
+            0.0
+        )
+
+        status_box = st.empty()
+
+        def update_progress(
+            value,
+            message
+        ):
+
+            progress_bar.progress(
+                min(
+                    max(
+                        float(value),
+                        0.0
+                    ),
+                    1.0
+                )
+            )
+
+            status_box.info(
+                message
+            )
+
+        with st.spinner(
+            "Downloading market data..."
+        ):
+
+            results = scan_universe(
+                selected_symbols,
+                update_progress
+            )
+
+        progress_bar.progress(1.0)
+
+        status_box.success(
+            "Zone scan completed."
+        )
+
+        if results:
+
+            result_df = pd.DataFrame(
+                results
+            )
+
+            # Only active zones
+            result_df = result_df[
+                result_df["State"].isin(
+                    [
+                        "Fresh",
+                        "Tested"
+                    ]
+                )
+            ].copy()
+
+            # HQ first
+            result_df["HQRank"] = (
+                result_df["HQ"]
+                .eq("HQ")
+                .astype(int)
+            )
+
+            # Timeframe priority
+            timeframe_rank = {
+                "Weekly": 6,
+                "Daily": 5,
+                "3H": 4,
+                "2H": 3,
+                "1H": 2,
+                "15M": 1
+            }
+
+            result_df["TF_Rank"] = (
+                result_df["Timeframe"]
+                .map(timeframe_rank)
+                .fillna(0)
+            )
+
+            result_df = result_df.sort_values(
+                [
+                    "HQRank",
+                    "Score",
+                    "TF_Rank",
+                    "DistancePct"
+                ],
+                ascending=[
+                    False,
+                    False,
+                    False,
+                    True
+                ]
+            )
+
+            st.session_state[
+                "brg_results"
+            ] = result_df
+
+        else:
+
+            st.session_state[
+                "brg_results"
+            ] = pd.DataFrame()
+
+
+# ============================================================
+# SINGLE STOCK
+# ============================================================
+
+else:
+
+    single_symbol = st.sidebar.text_input(
+        "NSE Symbol",
+        value="RELIANCE"
+    ).upper().strip()
+
+    single_button = st.sidebar.button(
+        "🚀 Scan Stock",
+        use_container_width=True
+    )
+
+    if single_button:
+
+        if not single_symbol:
+
+            st.error(
+                "Please enter NSE symbol."
+            )
+
+        else:
+
+            progress_bar = st.progress(
+                0.0
+            )
+
+            status_box = st.empty()
+
+            def single_progress(
+                value,
+                message
+            ):
+
+                progress_bar.progress(
+                    min(
+                        max(
+                            float(value),
+                            0.0
+                        ),
+                        1.0
+                    )
+                )
+
+                status_box.info(
+                    message
+                )
+
+            with st.spinner(
+                f"Scanning {single_symbol}..."
+            ):
+
+                results = scan_universe(
+                    [single_symbol],
+                    single_progress
+                )
+
+            progress_bar.progress(1.0)
+
+            status_box.success(
+                "Stock scan completed."
+            )
+
+            result_df = pd.DataFrame(
+                results
+            )
+
+            if not result_df.empty:
+
+                result_df = result_df[
+                    result_df["State"].isin(
+                        [
+                            "Fresh",
+                            "Tested"
+                        ]
+                    )
+                ].copy()
+
+                result_df["HQRank"] = (
+                    result_df["HQ"]
+                    .eq("HQ")
+                    .astype(int)
+                )
+
+                result_df = result_df.sort_values(
+                    [
+                        "HQRank",
+                        "Score",
+                        "DistancePct"
+                    ],
+                    ascending=[
+                        False,
+                        False,
+                        True
+                    ]
+                )
+
+            st.session_state[
+                "single_results"
+            ] = result_df
+
+
+# ============================================================
+# DISPLAY NIFTY RESULTS
+# ============================================================
+
+if (
+    scan_mode == "NIFTY Universe"
+    and
+    "brg_results" in st.session_state
+):
+
+    result = st.session_state[
+        "brg_results"
+    ]
+
+    if result.empty:
+
+        st.warning(
+            "कोई active Demand / Supply zone नहीं मिला."
+        )
+
+    else:
+
+        # ====================================================
+        # METRICS
+        # ====================================================
+
+        total_zones = len(result)
+
+        hq_count = int(
+            (
+                result["HQ"] ==
+                "HQ"
+            ).sum()
+        )
+
+        demand_count = int(
+            (
+                result["Type"] ==
+                "Demand"
+            ).sum()
+        )
+
+        supply_count = int(
+            (
+                result["Type"] ==
+                "Supply"
+            ).sum()
+        )
+
+        in_zone_count = int(
+            (
+                result["EntryStatus"] ==
+                "IN ZONE"
+            ).sum()
+        )
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+
+        c1.metric(
+            "Active Zones",
+            total_zones
+        )
+
+        c2.metric(
+            "HQ Zones",
+            hq_count
+        )
+
+        c3.metric(
+            "Demand",
+            demand_count
+        )
+
+        c4.metric(
+            "Supply",
+            supply_count
+        )
+
+        c5.metric(
+            "Price In Zone",
+            in_zone_count
+        )
+
+        # ====================================================
+        # TOP CANDIDATES
+        # ====================================================
+
+        st.subheader(
+            "🎯 BrG Trade Candidate List"
+        )
+
+        candidate_columns = [
+            "Symbol",
+            "Timeframe",
+            "Category",
+            "Pattern",
+            "Type",
+            "Direction",
+            "HQ",
+            "Score",
+            "State",
+            "Current",
+            "Entry",
+            "SL",
+            "TP",
+            "Qty",
+            "DistancePct",
+            "EntryStatus"
+        ]
+
+        candidate = result[
+            candidate_columns
+        ].copy()
+
+        candidate = format_result(
+            candidate
+        )
+
+        st.dataframe(
+            candidate.head(100),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # ====================================================
+        # FILTER
+        # ====================================================
+
+        st.subheader(
+            "🔍 Zone Filters"
+        )
+
+        f1, f2, f3, f4 = st.columns(4)
+
+        with f1:
+
+            selected_tf = st.multiselect(
+                "Timeframe",
+                TIMEFRAMES,
+                default=TIMEFRAMES
+            )
+
+        with f2:
+
+            selected_type = st.multiselect(
+                "Zone",
+                [
+                    "Demand",
+                    "Supply"
+                ],
+                default=[
+                    "Demand",
+                    "Supply"
+                ]
+            )
+
+        with f3:
+
+            selected_state = st.multiselect(
+                "State",
+                [
+                    "Fresh",
+                    "Tested"
+                ],
+                default=[
+                    "Fresh",
+                    "Tested"
+                ]
+            )
+
+        with f4:
+
+            score_filter = st.slider(
+                "Minimum Score",
+                0,
+                150,
+                int(min_valid_score),
+                step=5
+            )
+
+        filtered = result[
+            result["Timeframe"].isin(
+                selected_tf
+            )
+            &
+            result["Type"].isin(
+                selected_type
+            )
+            &
+            result["State"].isin(
+                selected_state
+            )
+            &
+            (
+                result["Score"] >=
+                score_filter
+            )
+        ].copy()
+
+        st.write(
+            f"**Filtered Zones: {len(filtered)}**"
+        )
+
+        filtered_columns = [
+            "Symbol",
+            "Timeframe",
+            "Category",
+            "Pattern",
+            "Type",
+            "Direction",
+            "HQ",
+            "Score",
+            "State",
+            "Touches",
+            "Current",
+            "Proximal",
+            "Distal",
+            "Entry",
+            "SL",
+            "TP",
+            "Qty",
+            "DistancePct",
+            "EntryStatus"
+        ]
+
+        filtered_display = format_result(
+            filtered[
+                filtered_columns
+            ].copy()
+        )
+
+        st.dataframe(
+            filtered_display,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # ====================================================
+        # DOWNLOAD
+        # ====================================================
+
+        st.download_button(
+            "⬇️ Download Zone CSV",
+            filtered.to_csv(
+                index=False
+            ).encode("utf-8"),
+            file_name=(
+                "BrG_Trading_Zone_Screener.csv"
+            ),
+            mime="text/csv"
+        )
+
+
+# ============================================================
+# DISPLAY SINGLE STOCK RESULTS
+# ============================================================
+
+if (
+    scan_mode == "Single Stock"
+    and
+    "single_results" in st.session_state
+):
+
+    result = st.session_state[
+        "single_results"
+    ]
+
+    if result.empty:
+
+        st.warning(
+            "इस stock में कोई active zone नहीं मिला."
+        )
+
+    else:
+
+        st.subheader(
+            "🎯 Active Demand / Supply Zones"
+        )
+
+        display_columns = [
+            "Timeframe",
+            "Category",
+            "Pattern",
+            "Type",
+            "Direction",
+            "HQ",
+            "Score",
+            "State",
+            "Touches",
+            "Current",
+            "Proximal",
+            "Distal",
+            "Entry",
+            "SL",
+            "TP",
+            "Qty",
+            "DistancePct",
+            "EntryStatus"
+        ]
+
+        display = format_result(
+            result[
+                display_columns
+            ].copy()
+        )
+
+        st.dataframe(
+            display,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.download_button(
+            "⬇️ Download Stock Zones",
+            result.to_csv(
+                index=False
+            ).encode("utf-8"),
+            file_name=(
+                f"{single_symbol}_BrG_Zones.csv"
+            ),
+            mime="text/csv"
+        )
+
+
+# ============================================================
+# LEGEND
+# ============================================================
+
+with st.expander(
+    "📖 BrG Zone Logic"
+):
+
+    st.markdown(
+        """
+**Demand Zone**
+
+- RBR = Rally Base Rally
+- DBR = Drop Base Rally
+
+**Supply Zone**
+
+- DBD = Drop Base Drop
+- RBD = Rally Base Drop
+
+**Zone State**
+
+- 🟢 Fresh = अभी तक meaningful test नहीं
+- 🟡 Tested = zone test हुआ लेकिन broken नहीं
+- 🔴 Broken = zone invalidate
+
+**Score**
+
+Pine Script के आधार पर:
+
+- Base quality
+- Leg-In strength
+- Leg-Out strength
+- Volume
+- Strong close
+- Opposite-color base
+- Genuine gap
+
+को score में शामिल किया गया है।
+
+**महत्वपूर्ण:** Screener किसी zone को अपने-आप BUY/SELL आदेश नहीं मानता। यह Demand/Supply zone और उसके आसपास का trade candidate दिखाता है।
+        """
+    )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.divider()
+
+st.caption(
+    "BrG Trading Zone V1.0 | "
+    "Based on supplied Pine Zone logic | "
+    "Yahoo Finance | Educational / Research use"
+)
