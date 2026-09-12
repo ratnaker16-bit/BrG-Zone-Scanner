@@ -1,1078 +1,1179 @@
+# ============================================================
+# BrG Trading Zone V1.0
+# NIFTY 200 Multi-Timeframe Demand / Supply Zone Scanner
+# Timeframes: 15m, 1H, 2H, 3H, Daily, Weekly
+# Data Source: Yahoo Finance
+# ============================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.graph_objects as go
 import yfinance as yf
 from datetime import datetime
-import pytz
 import time
 
-
-# =========================================================
+# ============================================================
 # PAGE CONFIG
-# =========================================================
+# ============================================================
 
 st.set_page_config(
-    page_title="Suman NIFTY 500 SMA Scanner",
+    page_title="BrG Trading Zone V1.0",
     page_icon="📊",
     layout="wide"
 )
 
+# ============================================================
+# TITLE
+# ============================================================
 
-# =========================================================
-# NIFTY 500 — 500 STOCK UNIVERSE
-# =========================================================
-
-NIFTY_500_STOCKS = """
-360ONE 3MINDIA ABB ACC ACMESOLAR AIAENG APLAPOLLO AUBANK AWL
-AADHARHFC AARTIIND AAVAS ABBOTINDIA ACE ACUTAAS ADANIENSOL ADANIENT
-ADANIGREEN ADANIPORTS ADANIPOWER ATGL ABCAPITAL ABFRL ABLBL ABREL
-ABSLAMC CPPLUS AEGISLOG AEGISVOPAK AFCONS AFFLE AJANTPHARM ALKEM
-ABDL ARE&M AMBER AMBUJACEM ANANDRATHI ANANTRAJ ANGELONE ANTHEM
-ANURAS APARINDS APOLLOHOSP APOLLOTYRE APTUS ASAHIINDIA ASHOKLEY
-ASIANPAINT ASTERDM ASTRAL ATHERENERG ATUL AUROPHARMA AIIL DMART
-AXISBANK BEML BLS BSE BAJAJ-AUTO BAJFINANCE BAJAJFINSV BAJAJHLDNG
-BAJAJHFL BALKRISIND BALRAMCHIN BANDHANBNK BANKBARODA BANKINDIA
-MAHABANK BATAINDIA BAYERCROP BELRISE BERGEPAINT BDL BEL BHARATFORG
-BHEL BPCL BHARTIARTL BHARTIHEXA BIKAJI GROWW BIOCON BSOFT BLUEDART
-BLUEJET BLUESTARCO BBTC BOSCHLTD FIRSTCRY BRIGADE BRITANNIA MAPMYINDIA
-CCL CESC CGPOWER CIEINDIA CRISIL CANFINHOME CANBK CANHLIFE CAPLIPOINT
-CGCL CARBORUNIV CARTRADE CASTROLIND CEATLTD CEMPRO CENTRALBK CDSL
-CHALET CHAMBLFERT CHENNPETRO CHOICEIN CHOLAHLDNG CHOLAFIN CIPLA CUB
-CLEAN COALINDIA COCHINSHIP COFORGE COHANCE COLPAL CAMS CONCORDBIO
-CONCOR COROMANDEL CRAFTSMAN CREDITACC CROMPTON CUMMINSIND CYIENT
-DCMSHRIRAM DLF DOMS DABUR DALBHARAT DATAPATTNS DEEPAKFERT DEEPAKNTR
-DELHIVERY DEVYANI DIVISLAB DIXON LALPATHLAB DRREDDY EIDPARRY EIHOTEL
-EICHERMOT ELECON ELGIEQUIP EMAMILTD EMCURE EMMVEE ENDURANCE ENGINERSIN
-ERIS ESCORTS ETERNAL EXIDEIND NYKAA FEDERALBNK FACT FINCABLES FSL
-FIVESTAR FORCEMOT FORTIS GAIL GVT&D GMRAIRPORT GABRIEL GALLANTT GRSE
-GICRE GILLETTE GLAND GLAXO GLENMARK MEDANTA GODIGIT GPIL GODFRYPHLP
-GODREJCP GODREJIND GODREJPROP GRANULES GRAPHITE GRASIM GRAVITA GESHIP
-FLUOROCHEM GMDCLTD HEG HBLENGINE HCLTECH HDBFS HDFCAMC HDFCBANK
-HDFCLIFE HFCL HAVELLS HEROMOTOCO HEXT HSCL HINDALCO HAL HINDCOPPER
-HINDPETRO HINDUNILVR HINDZINC POWERINDIA HOMEFIRST HONASA HONAUT HUDCO
-HYUNDAI ICICIBANK ICICIGI ICICIAMC ICICIPRULI IDBI IDFCFIRSTB IFCI
-IIFL IRB IRCON ITCHOTELS ITC ITI INDGN INDIACEM INDIAMART INDIANB
-IEX INDHOTEL IOC IOB IRCTC IRFC IREDA IGL INDUSTOWER INDUSINDBK
-NAUKRI INFY INOXWIND INTELLECT INDIGO IGIL IKS IPCALAB JKCEMENT JBMA
-JKTYRE JMFINANCIL JSWCEMENT JSWDULUX JSWENERGY JSWINFRA JSWSTEEL
-JAINREC JPPOWER J&KBANK JINDALSAW JSL JINDALSTEL JIOFIN JUBLFOOD
-JUBLINGREA JUBLPHARMA JWL JYOTICNC KPRMILL KEI KPITTECH KAJARIACER
-KPIL KALYANKJIL KARURVYSYA KAYNES KEC KFINTECH KIRLOSENG KOTAKBANK
-KIMS LTF LTTS LGEINDIA LICHSGFIN LTFOODS LTM LT LATENTVIEW LAURUSLABS
-THELEELA LEMONTREE LENSKART LICI LINDEINDIA LLOYDSME LODHA LUPIN MMTC
-MRF MGL M&MFIN M&M MANAPPURAM MRPL MANKIND MARICO MARUTI MFSL
-MAXHEALTH MAZDOCK MEESHO MINDACORP MSUMI MOTILALOFS MPHASIS MCX
-MUTHOOTFIN NATCOPHARM NBCC NCC NHPC NLCINDIA NMDC NSLNISP NTPCGREEN
-NTPC NH NATIONALUM NAVA NAVINFLUOR NESTLEIND NETWEB NEULANDLAB NEWGEN
-NAM-INDIA NIVABUPA NUVAMA NUVOCO OBEROIRLTY ONGC OIL OLAELEC OLECTRA
-PAYTM ONESOURCE OFSS POLICYBZR PCBL PGEL PIIND PNBHOUSING PTCIL
-PVRINOX PAGEIND PARADEEP PATANJALI PERSISTENT PETRONET PFIZER PHOENIXLTD
-PWL PIDILITIND PINELABS PIRAMALFIN PPLPHARMA POLYMED POLYCAB POONAWALLA
-PFC POWERGRID PREMIERENE PRESTIGE PFOCUS PNB RRKABEL RBLBANK RECLTD
-RHIM RITES RADICO RVNL RAILTEL RAINBOW RKFORGE REDINGTON RELIANCE RPOWER
-SBFC SBICARD SBILIFE SJVN SRF SAGILITY SAILIFE SAMMAANCAP MOTHERSON
-SAPPHIRE SARDAEN SAREGAMA SCHAEFFLER SCHNEIDER SCI SHREECEM SHRIRAMFIN
-SHYAMMETL ENRIN SIEMENS SIGNATURE SOBHA SOLARINDS SONACOMS SONATSOFTW
-STARHEALTH SBIN SAIL SUMICHEM SUNPHARMA SUNTV SUNDARMFIN SUPREMEIND
-SPLPETRO SUZLON SWANCORP SWIGGY SYNGENE SYRMA TBOTEK TVSMOTOR TATACAP
-TATACHEM TATACOMM TCS TATACONSUM TATAELXSI TATAINVEST TMCV TMPV TATAPOWER
-TATASTEEL TATATECH TTML TECHM TECHNOE TEGA TEJASNET TENNIND NIACL RAMCOCEM
-THERMAX TIMKEN TITAGARH TITAN TORNTPHARM TORNTPOWER TARIL TRAVELFOOD
-TRENT TRIDENT TRITURBINE TIINDIA UCOBANK UNOMINDA UPL UTIAMC ULTRACEMCO
-UNIONBANK UBL UNITDSPR URBANCO USHAMART VTL VBL VEDL VIJAYA VMM IDEA
-VOLTAS WAAREEENER WELCORP WELSPUNLIV WHIRLPOOL WIPRO WOCKPHARMA YESBANK
-ZFCVINDIA ZEEL ZENTEC ZENSARTECH ZYDUSLIFE ZYDUSWELL ECLERX
-""".split()
-
-
-# =========================================================
-# REMOVE DUPLICATES + VALIDATE
-# =========================================================
-
-NIFTY_500_STOCKS = list(
-    dict.fromkeys(NIFTY_500_STOCKS)
+st.title("📊 BrG Trading Zone V1.0")
+st.caption(
+    "NIFTY 200 | Demand & Supply | Support & Resistance | "
+    "15M • 1H • 2H • 3H • Daily • Weekly"
 )
 
-if len(NIFTY_500_STOCKS) != 500:
+# ============================================================
+# NIFTY 200
+# NOTE: Static snapshot. Update periodically if required.
+# ============================================================
 
-    st.error(
-        f"❌ Stock Universe Error: "
-        f"{len(NIFTY_500_STOCKS)} stocks loaded. "
-        f"Expected exactly 500."
-    )
+NIFTY200 = sorted(set([
+    # ---------------- NIFTY 50 ----------------
+    "ADANIENT", "ADANIPORTS", "APOLLOHOSP", "ASIANPAINT",
+    "AXISBANK", "BAJAJ-AUTO", "BAJFINANCE", "BAJAJFINSV",
+    "BEL", "BHARTIARTL", "CIPLA", "COALINDIA",
+    "DRREDDY", "EICHERMOT", "ETERNAL", "GRASIM",
+    "HCLTECH", "HDFCBANK", "HDFCLIFE", "HEROMOTOCO",
+    "HINDALCO", "HINDUNILVR", "ICICIBANK", "INDUSINDBK",
+    "INFY", "ITC", "JIOFIN", "JSWSTEEL",
+    "KOTAKBANK", "LT", "M&M", "MARUTI",
+    "NESTLEIND", "NTPC", "ONGC", "POWERGRID",
+    "RELIANCE", "SBILIFE", "SBIN", "SHRIRAMFIN",
+    "SUNPHARMA", "TATACONSUM", "TATASTEEL", "TCS",
+    "TECHM", "TITAN", "TRENT", "ULTRACEMCO",
+    "WIPRO",
 
-    st.stop()
+    # ---------------- NEXT 50 ----------------
+    "ABB", "AMBUJACEM", "BANKBARODA", "BOSCHLTD",
+    "CANBK", "CGPOWER", "CHOLAFIN", "COLPAL",
+    "DABUR", "DIVISLAB", "DLF", "DMART",
+    "GAIL", "GODREJCP", "GODREJPROP", "HAL",
+    "HAVELLS", "ICICIGI", "ICICIPRULI", "INDHOTEL",
+    "INDIANB", "INDUSTOWER", "IOC", "IRCTC",
+    "JINDALSTEL", "JSWENERGY", "LICI", "LODHA",
+    "LUPIN", "MARICO", "MAXHEALTH", "MOTHERSON",
+    "MPHASIS", "MUTHOOTFIN", "NHPC", "NMDC",
+    "OBEROIRLTY", "OFSS", "OIL", "PAGEIND",
+    "PAYTM", "PERSISTENT", "PFC", "PIDILITIND",
+    "PIIND", "PNB", "POLYCAB", "RECLTD",
+    "SAIL", "SBICARD", "SIEMENS", "SRF",
+    "SUPREMEIND", "TATAPOWER", "TORNTPHARM", "TORNTPOWER",
+    "TVSMOTOR", "UNITEDSPIRITS", "VEDL", "VOLTAS",
 
+    # ---------------- MIDCAP / LARGE MIDCAP ----------------
+    "ABCAPITAL", "ABFRL", "ACC", "ALKEM",
+    "APLAPOLLO", "ASHOKLEY", "ASTRAL", "AUROPHARMA",
+    "BALKRISIND", "BANDHANBNK", "BATAINDIA", "BHARATFORG",
+    "BIOCON", "BLUESTARCO", "BSE", "CAMS",
+    "CDSL", "CENTRALBK", "CESC", "COFORGE",
+    "CONCOR", "COROMANDEL", "CROMPTON", "CYIENT",
+    "DALBHARAT", "DEEPAKNTR", "DELHIVERY", "ESCORTS",
+    "EXIDEIND", "FEDERALBNK", "FORTIS", "GLENMARK",
+    "GMRINFRA", "GNFC", "GODFRYPHLP", "GUJGASLTD",
+    "IDFCFIRSTB", "IEX", "IGL", "INDIAMART",
+    "IPCALAB", "IRFC", "JUBLFOOD", "KALYANKJIL",
+    "KEI", "KPITTECH", "LAURUSLABS", "LICHSGFIN",
+    "LTIM", "MANAPPURAM", "MCX", "METROPOLIS",
+    "MGL", "MINDTREE", "MRF", "NATIONALUM",
+    "NAVINFLUOR", "NLCINDIA", "OLECTRA", "PEL",
+    "PERSISTENT", "PHOENIXLTD", "POLYMED", "PRESTIGE",
+    "RAMCOCEM", "RBLBANK", "SONACOMS", "STARHEALTH",
+    "SUMICHEM", "SUNDARMFIN", "SUNTV", "TATACHEM",
+    "TATACOMM", "TATAELXSI", "THERMAX", "TIMKEN",
+    "TITAN", "UBL", "UNOMINDA", "UPL",
+    "VBL", "VINATIORGA", "ZEEL"
+]))
 
-# =========================================================
-# YAHOO FINANCE TICKERS
-# =========================================================
+# ============================================================
+# SETTINGS
+# ============================================================
 
-YF_TICKERS = [
-    f"{symbol}.NS"
-    for symbol in NIFTY_500_STOCKS
-]
+st.sidebar.header("⚙️ Scanner Settings")
 
-
-# =========================================================
-# TIMEZONE
-# =========================================================
-
-IST = pytz.timezone(
-    "Asia/Kolkata"
+account_capital = st.sidebar.number_input(
+    "Capital ₹",
+    min_value=1000,
+    value=25000,
+    step=1000
 )
 
-
-# =========================================================
-# HEADER
-# =========================================================
-
-st.title(
-    "📊 SUMAN NIFTY 500 SMA CROSSOVER SCANNER"
+risk_pct = st.sidebar.number_input(
+    "Risk % per trade",
+    min_value=0.1,
+    max_value=10.0,
+    value=0.5,
+    step=0.1
 )
 
-st.markdown(
-    """
-### 5M + 15M — SMA 20 / SMA 200 CROSSOVER
-
-🟢 **BUY:** Price > SMA 200 + Price crosses SMA 20 upward
-
-🔴 **SELL:** Price < SMA 200 + Price crosses SMA 20 downward
-
-🟢 **STRONG BUY:** 5M BUY + 15M BUY
-
-🔴 **STRONG SELL:** 5M SELL + 15M SELL
-
-⚪ **WAIT:** No fresh crossover
-"""
+target_rr = st.sidebar.number_input(
+    "Target R:R",
+    min_value=0.5,
+    max_value=20.0,
+    value=5.0,
+    step=0.5
 )
 
-
-# =========================================================
-# SIDEBAR
-# =========================================================
-
-st.sidebar.header(
-    "⚙️ Scanner Settings"
+atr_period = st.sidebar.number_input(
+    "ATR Period",
+    min_value=5,
+    max_value=50,
+    value=14
 )
 
-st.sidebar.success(
-    f"✅ NIFTY 500: {len(NIFTY_500_STOCKS)} Stocks"
+vol_sma_period = st.sidebar.number_input(
+    "Volume SMA Period",
+    min_value=5,
+    max_value=100,
+    value=20
 )
 
-st.sidebar.info(
-    "5 Minute: ON"
+st.sidebar.subheader("Zone Quality")
+
+min_base_count = st.sidebar.number_input(
+    "Min Base Candles",
+    min_value=1,
+    max_value=3,
+    value=1
 )
 
-st.sidebar.info(
-    "15 Minute: ON"
+max_base_count = st.sidebar.number_input(
+    "Max Base Candles",
+    min_value=1,
+    max_value=3,
+    value=3
 )
 
-st.sidebar.info(
-    "SMA 20: ON"
+leg_in_min_atr = st.sidebar.number_input(
+    "Leg-In Min ATR",
+    min_value=0.5,
+    max_value=5.0,
+    value=1.0,
+    step=0.1
 )
 
-st.sidebar.info(
-    "SMA 200: ON"
+leg_in_base_mult = st.sidebar.number_input(
+    "Leg-In / Base Size",
+    min_value=1.0,
+    max_value=5.0,
+    value=2.0,
+    step=0.1
 )
 
-show_all = st.sidebar.checkbox(
-    "📋 Show Complete 500 Stock List",
-    value=False
+leg_in_body_pct = st.sidebar.number_input(
+    "Leg-In Body %",
+    min_value=0.3,
+    max_value=0.95,
+    value=0.60,
+    step=0.05
 )
 
+leg_out_tr_mult = st.sidebar.number_input(
+    "Leg-Out TR Multiplier",
+    min_value=1.0,
+    max_value=5.0,
+    value=1.2,
+    step=0.1
+)
 
-# =========================================================
-# STOCK LIST
-# =========================================================
+leg_out_min_ratio = st.sidebar.number_input(
+    "Leg-Out / Leg-In TR",
+    min_value=0.5,
+    max_value=5.0,
+    value=1.0,
+    step=0.1
+)
 
-if show_all:
+max_base_atr = st.sidebar.number_input(
+    "Max Base TR / ATR",
+    min_value=0.5,
+    max_value=3.0,
+    value=1.0,
+    step=0.1
+)
 
-    st.subheader(
-        "📋 COMPLETE NIFTY 500 STOCK LIST"
-    )
+min_clv = st.sidebar.number_input(
+    "Minimum CLV",
+    min_value=0.3,
+    max_value=0.95,
+    value=0.60,
+    step=0.05
+)
 
-    stock_df = pd.DataFrame(
-        {
-            "No.": range(
-                1,
-                len(NIFTY_500_STOCKS) + 1
-            ),
+max_wick_pct = st.sidebar.number_input(
+    "Maximum Wick %",
+    min_value=0.1,
+    max_value=0.8,
+    value=0.30,
+    step=0.05
+)
 
-            "Symbol": NIFTY_500_STOCKS
-        }
-    )
+use_imbalance = st.sidebar.checkbox(
+    "Use Imbalance Filter",
+    value=True
+)
 
-    st.dataframe(
-        stock_df,
-        use_container_width=True,
-        hide_index=True,
-        height=600
-    )
+max_imbalance_mult = st.sidebar.number_input(
+    "Max Imbalance Multiplier",
+    min_value=0.5,
+    max_value=3.0,
+    value=1.0,
+    step=0.1
+)
+
+st.sidebar.subheader("Score")
+
+min_valid_score = st.sidebar.number_input(
+    "Minimum Valid Score",
+    min_value=0,
+    max_value=100,
+    value=40
+)
+
+hq_score_threshold = st.sidebar.number_input(
+    "HQ Zone Score",
+    min_value=50,
+    max_value=150,
+    value=90
+)
+
+tested_retrace_pct = st.sidebar.number_input(
+    "Tested Retrace %",
+    min_value=0.1,
+    max_value=1.0,
+    value=0.50,
+    step=0.05
+)
+
+max_tested_count = st.sidebar.number_input(
+    "Maximum Tests",
+    min_value=1,
+    max_value=10,
+    value=2
+)
+
+sl_buffer_atr = st.sidebar.number_input(
+    "SL ATR Buffer",
+    min_value=0.0,
+    max_value=1.0,
+    value=0.10,
+    step=0.05
+)
+
+# ============================================================
+# TIMEFRAME SETTINGS
+# ============================================================
+
+TIMEFRAMES = {
+    "15M": "15m",
+    "1H": "1h",
+    "2H": "2h",
+    "3H": "3h",
+    "Daily": "1d",
+    "Weekly": "1wk"
+}
+
+# ============================================================
+# YAHOO PERIOD HELPERS
+# ============================================================
+
+def get_period_for_timeframe(tf):
+
+    if tf == "15M":
+        return "60d"
+
+    if tf == "1H":
+        return "730d"
+
+    if tf in ["2H", "3H"]:
+        return "730d"
+
+    if tf == "Daily":
+        return "5y"
+
+    if tf == "Weekly":
+        return "10y"
+
+    return "1y"
 
 
-# =========================================================
-# PREPARE DATA
-# =========================================================
+# ============================================================
+# DATA NORMALIZATION
+# ============================================================
 
-def prepare_data(df):
+def normalize_df(df):
 
     if df is None or df.empty:
-        return None
+        return pd.DataFrame()
 
     df = df.copy()
 
+    # Flatten MultiIndex
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [
+            str(col[0]).lower()
+            for col in df.columns
+        ]
+    else:
+        df.columns = [
+            str(col).lower()
+            for col in df.columns
+        ]
+
+    rename_map = {
+        "adj close": "close",
+        "datetime": "datetime",
+        "date": "datetime"
+    }
+
+    df = df.rename(columns=rename_map)
+
     required = [
-        "Open",
-        "High",
-        "Low",
-        "Close",
-        "Volume"
+        "open",
+        "high",
+        "low",
+        "close"
     ]
 
-    if not all(
-        col in df.columns
-        for col in required
-    ):
-        return None
-
     for col in required:
+        if col not in df.columns:
+            return pd.DataFrame()
 
+    if "volume" not in df.columns:
+        df["volume"] = 0
+
+    df = df[
+        ["open", "high", "low", "close", "volume"]
+    ].copy()
+
+    for col in [
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+    ]:
         df[col] = pd.to_numeric(
             df[col],
             errors="coerce"
         )
 
     df = df.dropna(
-        subset=["Close"]
-    )
-
-    if df.empty:
-        return None
-
-    # =====================================================
-    # TIMEZONE
-    # =====================================================
-
-    try:
-
-        if df.index.tz is None:
-
-            df.index = (
-                df.index
-                .tz_localize("UTC")
-            )
-
-        df.index = (
-            df.index
-            .tz_convert("Asia/Kolkata")
-        )
-
-    except Exception:
-        pass
-
-    # =====================================================
-    # MARKET HOURS
-    # =====================================================
-
-    try:
-
-        df = df.between_time(
-            "09:15",
-            "15:30"
-        )
-
-    except Exception:
-        pass
-
-    if df.empty:
-        return None
-
-    # =====================================================
-    # SMA 20
-    # =====================================================
-
-    df["SMA20"] = (
-        df["Close"]
-        .rolling(
-            window=20,
-            min_periods=20
-        )
-        .mean()
-    )
-
-    # =====================================================
-    # SMA 200
-    # =====================================================
-
-    df["SMA200"] = (
-        df["Close"]
-        .rolling(
-            window=200,
-            min_periods=200
-        )
-        .mean()
+        subset=[
+            "open",
+            "high",
+            "low",
+            "close"
+        ]
     )
 
     return df
 
 
-# =========================================================
-# SIGNAL LOGIC
-# =========================================================
+# ============================================================
+# FETCH DATA
+# ============================================================
 
-def get_signal(df):
+@st.cache_data(ttl=300, show_spinner=False)
+def download_data(symbol, interval):
 
-    df = prepare_data(df)
+    ticker = symbol.upper().strip()
 
-    if df is None:
-        return None
+    if not ticker.endswith(".NS"):
+        ticker = ticker + ".NS"
 
-    # Need previous + current candle
-    if len(df) < 201:
-        return None
+    period = get_period_for_timeframe(interval)
 
-    # Remove rows where SMA not available
-    valid = df.dropna(
+    try:
+
+        df = yf.download(
+            ticker,
+            period=period,
+            interval=TIMEFRAMES[interval],
+            auto_adjust=False,
+            progress=False,
+            threads=False
+        )
+
+        if df is None or df.empty:
+            return pd.DataFrame()
+
+        df = normalize_df(df)
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # Datetime index
+        if not isinstance(df.index, pd.DatetimeIndex):
+
+            try:
+                df.index = pd.to_datetime(df.index)
+            except Exception:
+                pass
+
+        return df
+
+    except Exception:
+        return pd.DataFrame()
+
+
+# ============================================================
+# RESAMPLE 1H -> 2H / 3H
+# ============================================================
+
+def resample_hourly(df, hours):
+
+    if df is None or df.empty:
+        return pd.DataFrame()
+
+    x = df.copy()
+
+    if not isinstance(x.index, pd.DatetimeIndex):
+        x.index = pd.to_datetime(x.index)
+
+    x = x.sort_index()
+
+    rule = f"{hours}h"
+
+    result = x.resample(
+        rule,
+        label="right",
+        closed="right"
+    ).agg({
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum"
+    })
+
+    result = result.dropna(
         subset=[
-            "SMA20",
-            "SMA200"
+            "open",
+            "high",
+            "low",
+            "close"
         ]
     )
 
-    if len(valid) < 2:
-        return None
+    return result
 
-    prev = valid.iloc[-2]
-    curr = valid.iloc[-1]
 
-    prev_close = float(
-        prev["Close"]
+# ============================================================
+# TRUE RANGE
+# ============================================================
+
+def true_range_series(df):
+
+    prev_close = df["close"].shift(1)
+
+    tr1 = df["high"] - df["low"]
+    tr2 = (df["high"] - prev_close).abs()
+    tr3 = (df["low"] - prev_close).abs()
+
+    return pd.concat(
+        [tr1, tr2, tr3],
+        axis=1
+    ).max(axis=1)
+
+
+# ============================================================
+# WILDER RMA
+# ============================================================
+
+def rma(series, length):
+
+    return series.ewm(
+        alpha=1 / length,
+        adjust=False,
+        min_periods=length
+    ).mean()
+
+
+# ============================================================
+# CANDLE HELPERS
+# ============================================================
+
+def candle_body(row):
+
+    return abs(
+        float(row["close"]) -
+        float(row["open"])
     )
 
-    curr_close = float(
-        curr["Close"]
+
+def candle_range(row):
+
+    return (
+        float(row["high"]) -
+        float(row["low"])
     )
 
-    prev_sma20 = float(
-        prev["SMA20"]
-    )
 
-    curr_sma20 = float(
-        curr["SMA20"]
-    )
+def body_pct(row):
 
-    curr_sma200 = float(
-        curr["SMA200"]
-    )
+    rng = candle_range(row)
 
-    # =====================================================
-    # BUY
-    #
-    # Current price must be above SMA200
-    # AND price crosses SMA20 upward
-    # =====================================================
+    if rng <= 0:
+        return 0
 
-    buy_cross = (
-        prev_close <= prev_sma20
-        and
-        curr_close > curr_sma20
-        and
-        curr_close > curr_sma200
-    )
-
-    # =====================================================
-    # SELL
-    #
-    # Current price must be below SMA200
-    # AND price crosses SMA20 downward
-    # =====================================================
-
-    sell_cross = (
-        prev_close >= prev_sma20
-        and
-        curr_close < curr_sma20
-        and
-        curr_close < curr_sma200
-    )
-
-    # =====================================================
-    # SIGNAL
-    # =====================================================
-
-    if buy_cross:
-
-        signal = "BUY"
-
-    elif sell_cross:
-
-        signal = "SELL"
-
-    else:
-
-        signal = "WAIT"
-
-    # =====================================================
-    # TREND STATUS
-    # =====================================================
-
-    if curr_close > curr_sma200:
-
-        trend = "ABOVE 200 SMA"
-
-    elif curr_close < curr_sma200:
-
-        trend = "BELOW 200 SMA"
-
-    else:
-
-        trend = "AT 200 SMA"
-
-    return {
-
-        "Signal": signal,
-
-        "Close": curr_close,
-
-        "SMA20": curr_sma20,
-
-        "SMA200": curr_sma200,
-
-        "Trend": trend
-    }
+    return candle_body(row) / rng
 
 
-# =========================================================
-# DOWNLOAD DATA
-# =========================================================
+def clv(row):
 
-@st.cache_data(ttl=60)
-def download_timeframe(
-    tickers,
-    interval
+    rng = candle_range(row)
+
+    if rng <= 0:
+        return 0.5
+
+    return (
+        float(row["close"]) -
+        float(row["low"])
+    ) / rng
+
+
+def is_bull(row):
+
+    return float(row["close"]) > float(row["open"])
+
+
+def is_bear(row):
+
+    return float(row["close"]) < float(row["open"])
+
+
+# ============================================================
+# ZONE STATE
+# ============================================================
+
+def get_zone_state(
+    df,
+    proximal,
+    distal,
+    zone_type,
+    created_index,
+    tested_retrace=tested_retrace_pct
 ):
 
-    all_data = {}
+    if df.empty:
+        return "Fresh", 0
 
-    # =====================================================
-    # IMPORTANT:
-    # 200 SMA के लिए पर्याप्त history
-    # =====================================================
+    try:
+        start_pos = df.index.get_loc(created_index)
 
-    period = "60d"
+    except Exception:
+        start_pos = max(0, len(df) - 50)
 
-    batch_size = 75
+    future = df.iloc[start_pos + 1:]
 
-    for start in range(
-        0,
-        len(tickers),
-        batch_size
+    if future.empty:
+        return "Fresh", 0
+
+    touches = 0
+
+    zone_size = abs(
+        float(proximal) -
+        float(distal)
+    )
+
+    if zone_size <= 0:
+        return "Fresh", 0
+
+    for _, row in future.iterrows():
+
+        high = float(row["high"])
+        low = float(row["low"])
+        close = float(row["close"])
+
+        # ---------------- DEMAND ----------------
+
+        if zone_type == "Demand":
+
+            if low <= proximal and high >= distal:
+
+                touches += 1
+
+            # Broken below distal
+            if close < distal:
+                return "Broken", touches
+
+        # ---------------- SUPPLY ----------------
+
+        else:
+
+            if high >= distal and low <= proximal:
+
+                touches += 1
+
+            # Broken above distal
+            if close > distal:
+                return "Broken", touches
+
+    if touches == 0:
+        return "Fresh", 0
+
+    if touches <= max_tested_count:
+        return "Tested", touches
+
+    return "Broken", touches
+
+
+# ============================================================
+# POSITION SIZE
+# ============================================================
+
+def calculate_position_size(entry, sl):
+
+    risk_money = (
+        float(account_capital) *
+        float(risk_pct) / 100
+    )
+
+    risk_per_share = abs(
+        float(entry) -
+        float(sl)
+    )
+
+    if risk_per_share <= 0:
+        return 0
+
+    qty = int(
+        risk_money /
+        risk_per_share
+    )
+
+    return max(qty, 0)
+
+
+# ============================================================
+# SCAN ONE DATAFRAME
+# ============================================================
+
+def run_scan(df, symbol, timeframe):
+
+    if df is None or df.empty:
+        return []
+
+    x = df.copy()
+
+    if len(x) < 50:
+        return []
+
+    x["TR"] = true_range_series(x)
+
+    x["ATR"] = rma(
+        x["TR"],
+        int(atr_period)
+    )
+
+    x["VOL_SMA"] = (
+        x["volume"]
+        .rolling(int(vol_sma_period))
+        .mean()
+    )
+
+    zones = []
+
+    # Need enough candles
+    for i in range(
+        max(atr_period, vol_sma_period) + 3,
+        len(x) - 1
     ):
 
-        batch = tickers[
-            start:start + batch_size
-        ]
+        current = x.iloc[i]
 
-        try:
+        atr = float(current["ATR"])
 
-            data = yf.download(
+        if not np.isfinite(atr) or atr <= 0:
+            continue
 
-                tickers=batch,
+        # ====================================================
+        # TRY BASES 1 -> 3
+        # ====================================================
 
-                period=period,
+        for base_count in range(
+            int(min_base_count),
+            int(max_base_count) + 1
+        ):
 
-                interval=interval,
+            base_start = i - base_count
 
-                group_by="ticker",
+            if base_start < 2:
+                continue
 
-                auto_adjust=False,
+            leg_in = x.iloc[base_start - 1]
+            base = x.iloc[
+                base_start:i
+            ]
 
-                prepost=False,
+            leg_out = x.iloc[i]
 
-                threads=True,
+            # ------------------------------------------------
+            # Base OHLC
+            # ------------------------------------------------
 
-                progress=False
+            base_high = float(
+                base["high"].max()
             )
 
-            if (
-                data is None
-                or data.empty
+            base_low = float(
+                base["low"].min()
+            )
+
+            base_tr_max = float(
+                base["TR"].max()
+            )
+
+            if base_high <= base_low:
+                continue
+
+            # ------------------------------------------------
+            # Base Quality
+            # ------------------------------------------------
+
+            if base_tr_max > (
+                float(max_base_atr) * atr
             ):
                 continue
 
-            # =================================================
-            # MULTI STOCK DATA
-            # =================================================
+            # Base body should be relatively small
+            base_ok = True
 
-            if isinstance(
-                data.columns,
-                pd.MultiIndex
+            for _, b in base.iterrows():
+
+                br = candle_range(b)
+
+                if br <= 0:
+                    base_ok = False
+                    break
+
+                bp = body_pct(b)
+
+                if bp > 0.75:
+                    base_ok = False
+                    break
+
+            if not base_ok:
+                continue
+
+            # ------------------------------------------------
+            # LEG-IN
+            # ------------------------------------------------
+
+            leg_in_tr = float(
+                leg_in["TR"]
+            )
+
+            leg_in_body = candle_body(
+                leg_in
+            )
+
+            leg_in_bp = body_pct(
+                leg_in
+            )
+
+            if leg_in_tr < (
+                float(leg_in_min_atr) * atr
             ):
+                continue
 
-                for ticker in batch:
+            if leg_in_bp < float(
+                leg_in_body_pct
+            ):
+                continue
 
-                    try:
+            # ------------------------------------------------
+            # LEG-IN DIRECTION
+            # ------------------------------------------------
 
-                        if (
-                            ticker
-                            in data.columns
-                            .levels[0]
-                        ):
+            if is_bull(leg_in):
+                direction = "Bullish"
 
-                            stock_data = (
-                                data[ticker]
-                                .copy()
-                            )
+            elif is_bear(leg_in):
+                direction = "Bearish"
 
-                            if (
-                                stock_data
-                                is not None
-                                and
-                                not stock_data.empty
-                            ):
+            else:
+                continue
 
-                                all_data[
-                                    ticker
-                                ] = stock_data
+            # ------------------------------------------------
+            # LEG-IN SIZE VS BASE
+            # ------------------------------------------------
 
-                    except Exception:
+            base_avg_range = float(
+                base["TR"].mean()
+            )
 
-                        continue
+            if base_avg_range <= 0:
+                continue
 
-            # =================================================
-            # SINGLE STOCK DATA
-            # =================================================
+            leg_in_size_ok = (
+                leg_in_tr >=
+                float(leg_in_base_mult) *
+                base_avg_range
+            )
+
+            # ------------------------------------------------
+            # LEG-OUT
+            # ------------------------------------------------
+
+            leg_out_tr = float(
+                leg_out["TR"]
+            )
+
+            if leg_out_tr < (
+                float(leg_out_tr_mult) * atr
+            ):
+                continue
+
+            if leg_out_tr < (
+                float(leg_out_min_ratio) *
+                leg_in_tr
+            ):
+                continue
+
+            # ------------------------------------------------
+            # LEG-OUT DIRECTION
+            # ------------------------------------------------
+
+            if direction == "Bullish":
+
+                if not is_bull(leg_out):
+                    continue
 
             else:
 
-                if len(batch) == 1:
+                if not is_bear(leg_out):
+                    continue
 
-                    all_data[
-                        batch[0]
-                    ] = data.copy()
+            # ------------------------------------------------
+            # CLV
+            # ------------------------------------------------
 
-        except Exception:
-
-            continue
-
-    return all_data
-
-
-# =========================================================
-# SCAN MARKET
-# =========================================================
-
-def scan_market(
-    data5,
-    data15
-):
-
-    records = []
-
-    for ticker in NIFTY_500_STOCKS:
-
-        yf_symbol = (
-            f"{ticker}.NS"
-        )
-
-        # =================================================
-        # 5 MINUTE
-        # =================================================
-
-        df5 = data5.get(
-            yf_symbol
-        )
-
-        sig5 = get_signal(
-            df5
-        )
-
-        # =================================================
-        # 15 MINUTE
-        # =================================================
-
-        df15 = data15.get(
-            yf_symbol
-        )
-
-        sig15 = get_signal(
-            df15
-        )
-
-        # =================================================
-        # SIGNALS
-        # =================================================
-
-        signal5 = (
-            sig5["Signal"]
-            if sig5
-            else "WAIT"
-        )
-
-        signal15 = (
-            sig15["Signal"]
-            if sig15
-            else "WAIT"
-        )
-
-        # =================================================
-        # FINAL SIGNAL
-        # =================================================
-
-        if (
-            signal5 == "BUY"
-            and
-            signal15 == "BUY"
-        ):
-
-            final_signal = (
-                "STRONG BUY"
+            leg_out_clv = clv(
+                leg_out
             )
 
-        elif (
-            signal5 == "SELL"
-            and
-            signal15 == "SELL"
-        ):
+            if direction == "Bullish":
 
-            final_signal = (
-                "STRONG SELL"
+                if leg_out_clv < float(min_clv):
+                    continue
+
+            else:
+
+                if leg_out_clv > (
+                    1 - float(min_clv)
+                ):
+                    continue
+
+            # ------------------------------------------------
+            # WICK FILTER
+            # ------------------------------------------------
+
+            lo = float(
+                leg_out["low"]
             )
 
-        elif (
-            signal5 == "BUY"
-            or
-            signal15 == "BUY"
-        ):
+            hi = float(
+                leg_out["high"]
+            )
 
-            final_signal = "BUY"
+            op = float(
+                leg_out["open"]
+            )
 
-        elif (
-            signal5 == "SELL"
-            or
-            signal15 == "SELL"
-        ):
+            cl = float(
+                leg_out["close"]
+            )
 
-            final_signal = "SELL"
+            rng = hi - lo
 
-        else:
+            if rng <= 0:
+                continue
 
-            final_signal = "WAIT"
+            if direction == "Bullish":
 
-        # =================================================
-        # RECORD
-        # =================================================
+                upper_wick = hi - max(op, cl)
 
-        records.append(
-            {
-
-                "Symbol": ticker,
-
-                "5M Signal": signal5,
-
-                "15M Signal": signal15,
-
-                "Final Signal": final_signal,
-
-                "5M Close": (
-                    sig5["Close"]
-                    if sig5
-                    else np.nan
-                ),
-
-                "5M SMA20": (
-                    sig5["SMA20"]
-                    if sig5
-                    else np.nan
-                ),
-
-                "5M SMA200": (
-                    sig5["SMA200"]
-                    if sig5
-                    else np.nan
-                ),
-
-                "5M Trend": (
-                    sig5["Trend"]
-                    if sig5
-                    else "NO DATA"
-                ),
-
-                "15M Close": (
-                    sig15["Close"]
-                    if sig15
-                    else np.nan
-                ),
-
-                "15M SMA20": (
-                    sig15["SMA20"]
-                    if sig15
-                    else np.nan
-                ),
-
-                "15M SMA200": (
-                    sig15["SMA200"]
-                    if sig15
-                    else np.nan
-                ),
-
-                "15M Trend": (
-                    sig15["Trend"]
-                    if sig15
-                    else "NO DATA"
+                wick_pct = (
+                    upper_wick / rng
                 )
-            }
-        )
 
-    return pd.DataFrame(
-        records
-    )
+            else:
 
+                lower_wick = min(op, cl) - lo
 
-# =========================================================
-# SCAN BUTTON
-# =========================================================
-
-scan = st.button(
-    "🔍 SCAN NIFTY 500",
-    type="primary",
-    use_container_width=True
-)
-
-
-# =========================================================
-# AUTO REFRESH
-# =========================================================
-
-auto_refresh = st.sidebar.checkbox(
-    "🔄 Auto Refresh",
-    value=False
-)
-
-refresh_seconds = st.sidebar.selectbox(
-    "Refresh Interval",
-    [30, 60, 120, 300],
-    index=1
-)
-
-
-# =========================================================
-# RUN SCANNER
-# =========================================================
-
-if scan or auto_refresh:
-
-    start_time = time.time()
-
-    now = datetime.now(
-        IST
-    )
-
-    st.info(
-        "🕐 Scan Time: "
-        + now.strftime(
-            "%d-%m-%Y %H:%M:%S"
-        )
-        + " IST"
-    )
-
-    progress = st.progress(0)
-
-    status = st.empty()
-
-    # =====================================================
-    # 5M DATA
-    # =====================================================
-
-    status.info(
-        "📥 5 Minute data download हो रहा है..."
-    )
-
-    data5 = download_timeframe(
-        YF_TICKERS,
-        "5m"
-    )
-
-    progress.progress(40)
-
-    # =====================================================
-    # 15M DATA
-    # =====================================================
-
-    status.info(
-        "📥 15 Minute data download हो रहा है..."
-    )
-
-    data15 = download_timeframe(
-        YF_TICKERS,
-        "15m"
-    )
-
-    progress.progress(70)
-
-    # =====================================================
-    # SCAN
-    # =====================================================
-
-    status.info(
-        "🔎 NIFTY 500 में SMA20 / SMA200 "
-        "crossover scan हो रहा है..."
-    )
-
-    result = scan_market(
-        data5,
-        data15
-    )
-
-    progress.progress(100)
-
-    elapsed = round(
-        time.time()
-        - start_time,
-        2
-    )
-
-    status.success(
-        f"✅ Scan Complete — "
-        f"{len(result)} Stocks Checked — "
-        f"{elapsed} seconds"
-    )
-
-    # =====================================================
-    # FORMAT
-    # =====================================================
-
-    if not result.empty:
-
-        numeric_cols = [
-            "5M Close",
-            "5M SMA20",
-            "5M SMA200",
-            "15M Close",
-            "15M SMA20",
-            "15M SMA200"
-        ]
-
-        for col in numeric_cols:
-
-            result[col] = (
-                pd.to_numeric(
-                    result[col],
-                    errors="coerce"
+                wick_pct = (
+                    lower_wick / rng
                 )
-                .round(2)
+
+            if wick_pct > float(max_wick_pct):
+                continue
+
+            # ------------------------------------------------
+            # VOLUME
+            # ------------------------------------------------
+
+            vol = float(
+                leg_out["volume"]
             )
 
-        # =================================================
-        # SIGNAL GROUPS
-        # =================================================
+            vol_sma = float(
+                leg_out["VOL_SMA"]
+            ) if np.isfinite(
+                leg_out["VOL_SMA"]
+            ) else 0
 
-        strong_buy = result[
-            result["Final Signal"]
-            == "STRONG BUY"
-        ]
-
-        strong_sell = result[
-            result["Final Signal"]
-            == "STRONG SELL"
-        ]
-
-        buy = result[
-            result["Final Signal"]
-            == "BUY"
-        ]
-
-        sell = result[
-            result["Final Signal"]
-            == "SELL"
-        ]
-
-        # =================================================
-        # DASHBOARD
-        # =================================================
-
-        st.subheader(
-            "📊 SCANNER SUMMARY"
-        )
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-
-        c1.metric(
-            "NIFTY 500",
-            len(result)
-        )
-
-        c2.metric(
-            "🟢 STRONG BUY",
-            len(strong_buy)
-        )
-
-        c3.metric(
-            "🔴 STRONG SELL",
-            len(strong_sell)
-        )
-
-        c4.metric(
-            "🟢 BUY",
-            len(buy)
-        )
-
-        c5.metric(
-            "🔴 SELL",
-            len(sell)
-        )
-
-        # =================================================
-        # STRONG BUY
-        # =================================================
-
-        st.subheader(
-            "🟢 STRONG BUY — 5M + 15M"
-        )
-
-        if strong_buy.empty:
-
-            st.info(
-                "आज कोई Strong Buy नहीं मिला।"
+            volume_ok = (
+                vol_sma > 0 and
+                vol > vol_sma
             )
 
-        else:
+            # ------------------------------------------------
+            # IMBALANCE
+            # ------------------------------------------------
 
-            st.dataframe(
-                strong_buy,
-                use_container_width=True,
-                hide_index=True
+            imbalance_ok = True
+
+            if use_imbalance:
+
+                if direction == "Bullish":
+
+                    gap = (
+                        float(leg_out["low"]) -
+                        float(leg_in["high"])
+                    )
+
+                else:
+
+                    gap = (
+                        float(leg_in["low"]) -
+                        float(leg_out["high"])
+                    )
+
+                imbalance_ok = (
+                    gap > 0 and
+                    gap <=
+                    float(max_imbalance_mult) *
+                    atr
+                )
+
+            # ------------------------------------------------
+            # PATTERN TYPE
+            # ------------------------------------------------
+
+            base_first = base.iloc[0]
+
+            base_bull = is_bull(
+                base_first
             )
 
-        # =================================================
-        # STRONG SELL
-        # =================================================
-
-        st.subheader(
-            "🔴 STRONG SELL — 5M + 15M"
-        )
-
-        if strong_sell.empty:
-
-            st.info(
-                "आज कोई Strong Sell नहीं मिला।"
+            base_bear = is_bear(
+                base_first
             )
 
-        else:
+            if direction == "Bullish":
 
-            st.dataframe(
-                strong_sell,
-                use_container_width=True,
-                hide_index=True
+                if base_bull:
+                    pattern = "RBR"
+                else:
+                    pattern = "DBR"
+
+                zone_type = "Demand"
+
+            else:
+
+                if base_bear:
+                    pattern = "DBD"
+                else:
+                    pattern = "RBD"
+
+                zone_type = "Supply"
+
+            # ------------------------------------------------
+            # SCORE
+            # ------------------------------------------------
+
+            score = 10
+
+            if base_count == 1:
+                score += 15
+
+            if leg_in_tr >= (
+                1.5 * atr
+            ):
+                score += 10
+
+            if leg_out_tr >= (
+                2.0 * leg_in_tr
+            ):
+                score += 15
+
+            if leg_in_size_ok:
+                score += 15
+
+            if volume_ok:
+                score += 10
+
+            if direction == "Bullish":
+                strong_close = (
+                    leg_out_clv >= 0.75
+                )
+            else:
+                strong_close = (
+                    leg_out_clv <= 0.25
+                )
+
+            if strong_close:
+                score += 15
+
+            if base_bull != base_bear:
+                score += 10
+
+            if imbalance_ok:
+                score += 10
+
+            # ------------------------------------------------
+            # ZONE
+            # ------------------------------------------------
+
+            if zone_type == "Demand":
+
+                proximal = base_high
+                distal = base_low
+
+                sl = (
+                    distal -
+                    float(sl_buffer_atr) *
+                    atr
+                )
+
+                entry = proximal
+
+                risk = entry - sl
+
+                if risk <= 0:
+                    continue
+
+                tp = (
+                    entry +
+                    float(target_rr) *
+                    risk
+                )
+
+            else:
+
+                proximal = base_low
+                distal = base_high
+
+                sl = (
+                    distal +
+                    float(sl_buffer_atr) *
+                    atr
+                )
+
+                entry = proximal
+
+                risk = sl - entry
+
+                if risk <= 0:
+                    continue
+
+                tp = (
+                    entry -
+                    float(target_rr) *
+                    risk
+                )
+
+            # ------------------------------------------------
+            # SCORE FILTER
+            # ------------------------------------------------
+
+            if score < int(min_valid_score):
+                continue
+
+            hq = (
+                "HQ"
+                if score >= int(hq_score_threshold)
+                else "Standard"
             )
 
-        # =================================================
-        # BUY
-        # =================================================
+            # ------------------------------------------------
+            # STATE
+            # ------------------------------------------------
 
-        st.subheader(
-            "🟢 BUY — SMA20 CROSS ABOVE"
-        )
+            created_index = x.index[i]
 
-        if buy.empty:
-
-            st.info(
-                "आज कोई BUY नहीं मिला।"
+            state, touches = get_zone_state(
+                x,
+                proximal,
+                distal,
+                zone_type,
+                created_index
             )
 
-        else:
+            # ------------------------------------------------
+            # POSITION SIZE
+            # ------------------------------------------------
 
-            st.dataframe(
-                buy,
-                use_container_width=True,
-                hide_index=True
+            qty = calculate_position_size(
+                entry,
+                sl
             )
 
-        # =================================================
-        # SELL
-        # =================================================
+            # ------------------------------------------------
+            # CURRENT PRICE
+            # ------------------------------------------------
 
-        st.subheader(
-            "🔴 SELL — SMA20 CROSS BELOW"
-        )
-
-        if sell.empty:
-
-            st.info(
-                "आज कोई SELL नहीं मिला।"
+            current_price = float(
+                x["close"].iloc[-1]
             )
 
-        else:
+            # Distance to zone
+            if current_price < min(
+                proximal,
+                distal
+            ):
 
-            st.dataframe(
-                sell,
-                use_container_width=True,
-                hide_index=True
+                distance = (
+                    min(proximal, distal) -
+                    current_price
+                )
+
+            elif current_price > max(
+                proximal,
+                distal
+            ):
+
+                distance = (
+                    current_price -
+                    max(proximal, distal)
+                )
+
+            else:
+
+                distance = 0
+
+            distance_pct = (
+                distance /
+                current_price *
+                100
+                if current_price > 0
+                else 0
             )
 
-        # =================================================
-        # ALL 500
-        # =================================================
+            # ------------------------------------------------
+            # ENTRY STATUS
+            # ------------------------------------------------
 
-        with st.expander(
-            "📊 ALL 500 STOCK RESULTS"
-        ):
-
-            st.dataframe(
-                result,
-                use_container_width=True,
-                hide_index=True,
-                height=700
-            )
-
-        # =================================================
-        # CSV
-        # =================================================
-
-        csv = (
-            result
-            .to_csv(index=False)
-            .encode("utf-8")
-        )
-
-        st.download_button(
-            "⬇️ Download CSV",
-            csv,
-            "Suman_NIFTY500_SMA20_SMA200_Scanner.csv",
-            "text/csv",
-            use_container_width=True
-        )
-
-    else:
-
-        st.warning(
-            "⚠️ कोई data उपलब्ध नहीं हुआ।"
-        )
-
-
-# =========================================================
-# FOOTER
-# =========================================================
-
-st.markdown("---")
-
-st.caption(
-    "SUMAN NIFTY 500 SMA CROSSOVER SCANNER | "
-    "500 Stocks | "
-    "5M + 15M | "
-    "Price + SMA20 + SMA200 | "
-    "Yahoo Finance Data"
-)
-
-
-# =========================================================
-# AUTO REFRESH
-# =========================================================
-
-if auto_refresh:
-
-    time.sleep(
-        refresh_seconds
-    )
-
-    st.rerun()
+            if zone_type == "
