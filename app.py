@@ -5,14 +5,18 @@ import yfinance as yf
 from datetime import datetime
 import time
 
+
 # ============================================================
-# BrG Trading Zone Screener V1.0
-# Based on the supplied Pine Script Zone logic
+# BrG Trading Zone Screener V1.1
+# Demand / Supply Zone Screener
+# RBR • DBR • DBD • RBD
+# 15M • 1H • 2H • 3H • Daily • Weekly
 #
-# Timeframes:
-# 15M / 1H / 2H / 3H / Daily / Weekly
-#
-# 2H and 3H are created from 1H data.
+# V1.1
+# - Pandas 3.x safe sorting
+# - Timezone-safe Created timestamp
+# - Numeric type normalization
+# - Safe deduplication
 # ============================================================
 
 
@@ -31,7 +35,7 @@ st.set_page_config(
 # TITLE
 # ============================================================
 
-st.title("📊 BrG Trading Zone Screener V1.0")
+st.title("📊 BrG Trading Zone Screener V1.1")
 
 st.caption(
     "Demand / Supply Zone Screener | "
@@ -284,6 +288,11 @@ vol_sma_period = st.sidebar.number_input(
     step=1
 )
 
+
+# ============================================================
+# BASE / LEG SETTINGS
+# ============================================================
+
 st.sidebar.subheader("Base / Leg")
 
 min_base_count = st.sidebar.number_input(
@@ -333,6 +342,11 @@ max_base_atr_mult = st.sidebar.number_input(
     value=1.0,
     step=0.1
 )
+
+
+# ============================================================
+# LEG-OUT SETTINGS
+# ============================================================
 
 st.sidebar.subheader("Leg-Out")
 
@@ -384,6 +398,11 @@ min_clv_pct = st.sidebar.number_input(
     step=0.05
 )
 
+
+# ============================================================
+# IMBALANCE
+# ============================================================
+
 st.sidebar.subheader("Imbalance")
 
 use_imbalance = st.sidebar.checkbox(
@@ -406,6 +425,11 @@ reject_opposite_cover = st.sidebar.number_input(
     value=0.50,
     step=0.05
 )
+
+
+# ============================================================
+# SCORE
+# ============================================================
 
 st.sidebar.subheader("Score")
 
@@ -477,6 +501,7 @@ TIMEFRAMES = [
 # ============================================================
 
 def add_ns(symbol):
+
     symbol = str(symbol).upper().strip()
 
     if symbol.endswith(".NS"):
@@ -486,11 +511,20 @@ def add_ns(symbol):
 
 
 def true_range(df):
+
     previous_close = df["close"].shift(1)
 
     tr1 = df["high"] - df["low"]
-    tr2 = (df["high"] - previous_close).abs()
-    tr3 = (df["low"] - previous_close).abs()
+
+    tr2 = (
+        df["high"] -
+        previous_close
+    ).abs()
+
+    tr3 = (
+        df["low"] -
+        previous_close
+    ).abs()
 
     return pd.concat(
         [tr1, tr2, tr3],
@@ -499,6 +533,7 @@ def true_range(df):
 
 
 def rma(series, length):
+
     return series.ewm(
         alpha=1.0 / float(length),
         adjust=False,
@@ -507,6 +542,7 @@ def rma(series, length):
 
 
 def candle_body(row):
+
     return abs(
         float(row["close"]) -
         float(row["open"])
@@ -514,6 +550,7 @@ def candle_body(row):
 
 
 def candle_range(row):
+
     return (
         float(row["high"]) -
         float(row["low"])
@@ -521,6 +558,7 @@ def candle_range(row):
 
 
 def body_pct(row):
+
     rng = candle_range(row)
 
     if rng <= 0:
@@ -530,14 +568,23 @@ def body_pct(row):
 
 
 def is_bull(row):
-    return float(row["close"]) > float(row["open"])
+
+    return (
+        float(row["close"]) >
+        float(row["open"])
+    )
 
 
 def is_bear(row):
-    return float(row["open"]) > float(row["close"])
+
+    return (
+        float(row["open"]) >
+        float(row["close"])
+    )
 
 
 def clv_bull(row):
+
     rng = candle_range(row)
 
     if rng <= 0:
@@ -550,6 +597,7 @@ def clv_bull(row):
 
 
 def clv_bear(row):
+
     rng = candle_range(row)
 
     if rng <= 0:
@@ -562,6 +610,7 @@ def clv_bear(row):
 
 
 def total_wick_pct(row):
+
     rng = candle_range(row)
 
     if rng <= 0:
@@ -583,10 +632,13 @@ def total_wick_pct(row):
         float(row["low"])
     )
 
-    return (upper + lower) / rng
+    return (
+        upper + lower
+    ) / rng
 
 
 def body_high(row):
+
     return max(
         float(row["open"]),
         float(row["close"])
@@ -594,6 +646,7 @@ def body_high(row):
 
 
 def body_low(row):
+
     return min(
         float(row["open"]),
         float(row["close"])
@@ -605,13 +658,21 @@ def body_low(row):
 # ============================================================
 
 def clean_dataframe(df):
+
     if df is None or df.empty:
         return pd.DataFrame()
 
     x = df.copy()
 
-    if isinstance(x.columns, pd.MultiIndex):
-        # Try to identify OHLC level.
+    # --------------------------------------------------------
+    # MultiIndex columns
+    # --------------------------------------------------------
+
+    if isinstance(
+        x.columns,
+        pd.MultiIndex
+    ):
+
         level0 = [
             str(v).lower()
             for v in x.columns.get_level_values(0)
@@ -623,24 +684,33 @@ def clean_dataframe(df):
         ]
 
         if "open" in level0:
+
             x.columns = level0
 
         elif "open" in level1:
+
             x.columns = level1
 
         else:
+
             x.columns = [
                 str(c[0]).lower()
                 for c in x.columns
             ]
 
     else:
+
         x.columns = [
             str(c).lower()
             for c in x.columns
         ]
 
+    # --------------------------------------------------------
+    # Adj Close
+    # --------------------------------------------------------
+
     if "adj close" in x.columns:
+
         x = x.drop(
             columns=["adj close"],
             errors="ignore"
@@ -654,10 +724,17 @@ def clean_dataframe(df):
     ]
 
     for column in required:
+
         if column not in x.columns:
+
             return pd.DataFrame()
 
+    # --------------------------------------------------------
+    # Volume
+    # --------------------------------------------------------
+
     if "volume" not in x.columns:
+
         x["volume"] = 0.0
 
     x = x[
@@ -670,7 +747,12 @@ def clean_dataframe(df):
         ]
     ].copy()
 
+    # --------------------------------------------------------
+    # Numeric conversion
+    # --------------------------------------------------------
+
     for column in x.columns:
+
         x[column] = pd.to_numeric(
             x[column],
             errors="coerce"
@@ -685,10 +767,15 @@ def clean_dataframe(df):
         ]
     )
 
+    # --------------------------------------------------------
+    # Datetime index
+    # --------------------------------------------------------
+
     if not isinstance(
         x.index,
         pd.DatetimeIndex
     ):
+
         x.index = pd.to_datetime(
             x.index,
             errors="coerce"
@@ -697,6 +784,41 @@ def clean_dataframe(df):
     x = x[
         ~x.index.isna()
     ]
+
+    # --------------------------------------------------------
+    # Normalize timezone
+    #
+    # इससे 15M / 1H / Daily / Weekly के बीच
+    # datetime comparison safe रहता है।
+    # --------------------------------------------------------
+
+    try:
+
+        if x.index.tz is not None:
+
+            x.index = x.index.tz_convert(
+                "UTC"
+            )
+
+        else:
+
+            x.index = x.index.tz_localize(
+                "UTC"
+            )
+
+    except Exception:
+
+        try:
+
+            x.index = pd.DatetimeIndex(
+                x.index
+            ).tz_localize(
+                "UTC"
+            )
+
+        except Exception:
+
+            pass
 
     x = x.sort_index()
 
@@ -716,6 +838,7 @@ def download_batch(
     interval,
     period
 ):
+
     if not symbols:
         return {}
 
@@ -725,6 +848,7 @@ def download_batch(
     ]
 
     try:
+
         data = yf.download(
             tickers=tickers,
             period=period,
@@ -736,14 +860,19 @@ def download_batch(
         )
 
     except Exception:
+
         return {}
 
     if data is None or data.empty:
+
         return {}
 
     result = {}
 
-    # Multi-symbol response
+    # ========================================================
+    # MULTI SYMBOL
+    # ========================================================
+
     if isinstance(
         data.columns,
         pd.MultiIndex
@@ -751,23 +880,30 @@ def download_batch(
 
         first_level = set(
             str(x)
-            for x in data.columns.get_level_values(0)
+            for x in
+            data.columns.get_level_values(0)
         )
 
         second_level = set(
             str(x)
-            for x in data.columns.get_level_values(1)
+            for x in
+            data.columns.get_level_values(1)
         )
 
         for original in symbols:
 
-            ticker = add_ns(original)
+            ticker = add_ns(
+                original
+            )
 
             try:
+
                 if ticker in first_level:
+
                     part = data[ticker]
 
                 elif ticker in second_level:
+
                     part = data.xs(
                         ticker,
                         axis=1,
@@ -775,23 +911,40 @@ def download_batch(
                     )
 
                 else:
+
                     continue
 
-                part = clean_dataframe(part)
+                part = clean_dataframe(
+                    part
+                )
 
                 if not part.empty:
-                    result[original] = part
+
+                    result[
+                        original
+                    ] = part
 
             except Exception:
+
                 continue
+
+    # ========================================================
+    # SINGLE SYMBOL
+    # ========================================================
 
     else:
 
         if len(symbols) == 1:
-            part = clean_dataframe(data)
+
+            part = clean_dataframe(
+                data
+            )
 
             if not part.empty:
-                result[symbols[0]] = part
+
+                result[
+                    symbols[0]
+                ] = part
 
     return result
 
@@ -800,8 +953,13 @@ def download_batch(
 # RESAMPLE 1H -> 2H / 3H
 # ============================================================
 
-def resample_hourly(df, hours):
+def resample_hourly(
+    df,
+    hours
+):
+
     if df is None or df.empty:
+
         return pd.DataFrame()
 
     x = df.copy()
@@ -843,10 +1001,14 @@ def prepare_symbol_data(
     data_daily,
     data_weekly
 ):
+
     result = {}
 
     if symbol in data_15m:
-        result["15M"] = data_15m[symbol]
+
+        result["15M"] = (
+            data_15m[symbol]
+        )
 
     if symbol in data_1h:
 
@@ -860,6 +1022,7 @@ def prepare_symbol_data(
         )
 
         if not df2h.empty:
+
             result["2H"] = df2h
 
         df3h = resample_hourly(
@@ -868,13 +1031,20 @@ def prepare_symbol_data(
         )
 
         if not df3h.empty:
+
             result["3H"] = df3h
 
     if symbol in data_daily:
-        result["Daily"] = data_daily[symbol]
+
+        result["Daily"] = (
+            data_daily[symbol]
+        )
 
     if symbol in data_weekly:
-        result["Weekly"] = data_weekly[symbol]
+
+        result["Weekly"] = (
+            data_weekly[symbol]
+        )
 
     return result
 
@@ -888,7 +1058,9 @@ def scan_dataframe(
     symbol,
     timeframe
 ):
+
     if df is None or df.empty:
+
         return []
 
     x = df.copy()
@@ -899,7 +1071,12 @@ def scan_dataframe(
     )
 
     if len(x) < minimum_bars:
+
         return []
+
+    # --------------------------------------------------------
+    # ATR / TR / Volume
+    # --------------------------------------------------------
 
     x["TR"] = true_range(x)
 
@@ -934,11 +1111,9 @@ def scan_dataframe(
         )
     )
 
-    # --------------------------------------------------------
-    # i = LEG-OUT
-    # base = previous candles
-    # leg-in = candle before base
-    # --------------------------------------------------------
+    # ========================================================
+    # LEG-OUT LOOP
+    # ========================================================
 
     for i in range(
         max(
@@ -953,26 +1128,44 @@ def scan_dataframe(
         if not np.isfinite(
             leg_out["ATR"]
         ):
+
             continue
 
         zone_found = False
+
+        # ====================================================
+        # BASE COUNT
+        # ====================================================
 
         for b_count in range(
             min_base,
             max_base + 1
         ):
 
-            leg_in_idx = i - b_count - 1
+            leg_in_idx = (
+                i -
+                b_count -
+                1
+            )
 
-            prev_idx = leg_in_idx - 1
+            prev_idx = (
+                leg_in_idx -
+                1
+            )
 
-            base_start = i - b_count
+            base_start = (
+                i -
+                b_count
+            )
+
             base_end = i
 
             if leg_in_idx < 1:
+
                 continue
 
             if base_start < 0:
+
                 continue
 
             leg_in = x.iloc[
@@ -984,6 +1177,7 @@ def scan_dataframe(
             ]
 
             if len(base) != b_count:
+
                 continue
 
             # =================================================
@@ -998,19 +1192,28 @@ def scan_dataframe(
                 leg_in["ATR"]
             )
 
-            if not np.isfinite(
-                leg_in_atr
-            ) or leg_in_atr <= 0:
+            if (
+                not np.isfinite(
+                    leg_in_atr
+                )
+                or
+                leg_in_atr <= 0
+            ):
+
                 continue
 
             if candle_range(
                 leg_in
             ) <= 0:
+
                 continue
 
             if body_pct(
                 leg_in
-            ) < float(leg_in_body_pct):
+            ) < float(
+                leg_in_body_pct
+            ):
+
                 continue
 
             leg_in_bull = is_bull(
@@ -1025,10 +1228,11 @@ def scan_dataframe(
                 leg_in_bull or
                 leg_in_bear
             ):
+
                 continue
 
             # =================================================
-            # OPPOSITE COVER REJECTION
+            # OPPOSITE COVER
             # =================================================
 
             if prev_idx >= 0:
@@ -1038,23 +1242,37 @@ def scan_dataframe(
                 ]
 
                 opposite = (
-                    leg_in_bull and
-                    is_bear(previous)
-                ) or (
-                    leg_in_bear and
-                    is_bull(previous)
+                    (
+                        leg_in_bull
+                        and
+                        is_bear(previous)
+                    )
+                    or
+                    (
+                        leg_in_bear
+                        and
+                        is_bull(previous)
+                    )
                 )
 
                 if opposite:
 
                     overlap_high = min(
-                        body_high(previous),
-                        float(leg_in["high"])
+                        body_high(
+                            previous
+                        ),
+                        float(
+                            leg_in["high"]
+                        )
                     )
 
                     overlap_low = max(
-                        body_low(previous),
-                        float(leg_in["low"])
+                        body_low(
+                            previous
+                        ),
+                        float(
+                            leg_in["low"]
+                        )
                     )
 
                     overlap = max(
@@ -1063,8 +1281,10 @@ def scan_dataframe(
                         overlap_low
                     )
 
-                    leg_in_range = candle_range(
-                        leg_in
+                    leg_in_range = (
+                        candle_range(
+                            leg_in
+                        )
                     )
 
                     cover_pct = (
@@ -1077,6 +1297,7 @@ def scan_dataframe(
                     if cover_pct >= float(
                         reject_opposite_cover
                     ):
+
                         continue
 
             # =================================================
@@ -1096,6 +1317,7 @@ def scan_dataframe(
             )
 
             if max_base_tr <= 0:
+
                 continue
 
             base_valid = True
@@ -1106,22 +1328,33 @@ def scan_dataframe(
                     candle["ATR"]
                 )
 
-                if not np.isfinite(
-                    atr_b
-                ) or atr_b <= 0:
+                if (
+                    not np.isfinite(
+                        atr_b
+                    )
+                    or
+                    atr_b <= 0
+                ):
+
                     base_valid = False
+
                     break
 
                 if float(
                     candle["TR"]
                 ) > (
-                    float(max_base_atr_mult) *
+                    float(
+                        max_base_atr_mult
+                    ) *
                     atr_b
                 ):
+
                     base_valid = False
+
                     break
 
             if not base_valid:
+
                 continue
 
             # =================================================
@@ -1131,19 +1364,25 @@ def scan_dataframe(
             effective_base_mult = (
                 1.5
                 if b_count == 1
-                else float(leg_in_to_base_mult)
+                else float(
+                    leg_in_to_base_mult
+                )
             )
 
             if leg_in_tr < (
                 effective_base_mult *
                 max_base_tr
             ):
+
                 continue
 
             if leg_in_tr < (
-                float(leg_in_min_atr) *
+                float(
+                    leg_in_min_atr
+                ) *
                 leg_in_atr
             ):
+
                 continue
 
             # =================================================
@@ -1158,9 +1397,14 @@ def scan_dataframe(
                 leg_out["ATR"]
             )
 
-            if not np.isfinite(
-                leg_out_atr
-            ) or leg_out_atr <= 0:
+            if (
+                not np.isfinite(
+                    leg_out_atr
+                )
+                or
+                leg_out_atr <= 0
+            ):
+
                 continue
 
             leg_out_bull = is_bull(
@@ -1175,6 +1419,7 @@ def scan_dataframe(
                 leg_out_bull or
                 leg_out_bear
             ):
+
                 continue
 
             # =================================================
@@ -1182,15 +1427,21 @@ def scan_dataframe(
             # =================================================
 
             if leg_out_tr < (
-                float(leg_out_tr_mult) *
+                float(
+                    leg_out_tr_mult
+                ) *
                 leg_out_atr
             ):
+
                 continue
 
             if leg_out_tr < (
-                float(leg_out_min_ratio) *
+                float(
+                    leg_out_min_ratio
+                ) *
                 leg_in_tr
             ):
+
                 continue
 
             # =================================================
@@ -1199,7 +1450,10 @@ def scan_dataframe(
 
             if total_wick_pct(
                 leg_out
-            ) > float(max_wick_pct):
+            ) > float(
+                max_wick_pct
+            ):
+
                 continue
 
             # =================================================
@@ -1220,6 +1474,7 @@ def scan_dataframe(
             )
 
             if not passes_volume:
+
                 continue
 
             # =================================================
@@ -1235,6 +1490,7 @@ def scan_dataframe(
                 if leg_out_clv < float(
                     min_clv_pct
                 ):
+
                     continue
 
             else:
@@ -1246,14 +1502,17 @@ def scan_dataframe(
                 if leg_out_clv < float(
                     min_clv_pct
                 ):
+
                     continue
 
             # =================================================
-            # IMBALANCE / GAP
+            # IMBALANCE
             # =================================================
 
             has_imbalance = True
+
             genuine_gap = False
+
             gap_size = 0.0
 
             if use_imbalance:
@@ -1261,41 +1520,66 @@ def scan_dataframe(
                 if leg_out_bull:
 
                     genuine_gap = (
-                        float(leg_out["low"]) >
+                        float(
+                            leg_out["low"]
+                        )
+                        >
                         base_high
                     )
 
                     gap_condition = (
-                        genuine_gap or
-                        float(leg_out["close"]) >
-                        float(leg_in["high"])
+                        genuine_gap
+                        or
+                        (
+                            float(
+                                leg_out["close"]
+                            )
+                            >
+                            float(
+                                leg_in["high"]
+                            )
+                        )
                     )
 
                     gap_size = max(
                         0.0,
                         float(
                             leg_out["low"]
-                        ) -
+                        )
+                        -
                         base_high
                     )
 
                 else:
 
                     genuine_gap = (
-                        float(leg_out["high"]) <
+                        float(
+                            leg_out["high"]
+                        )
+                        <
                         base_low
                     )
 
                     gap_condition = (
-                        genuine_gap or
-                        float(leg_out["close"]) <
-                        float(leg_in["low"])
+                        genuine_gap
+                        or
+                        (
+                            float(
+                                leg_out["close"]
+                            )
+                            <
+                            float(
+                                leg_in["low"]
+                            )
+                        )
                     )
 
                     gap_size = max(
                         0.0,
                         base_low -
-                        float(leg_out["high"])
+                        float(
+                            leg_out["high"]
+                        )
                     )
 
                 has_imbalance = (
@@ -1305,113 +1589,169 @@ def scan_dataframe(
                 if genuine_gap:
 
                     if gap_size > (
-                        float(max_imbalance_mult) *
+                        float(
+                            max_imbalance_mult
+                        ) *
                         leg_in_tr
                     ):
+
                         continue
 
             if not has_imbalance:
+
                 continue
 
             # =================================================
             # ENGULF CHECK
             # =================================================
 
-            leg_out_body_high = body_high(
-                leg_out
+            leg_out_body_high = (
+                body_high(
+                    leg_out
+                )
             )
 
-            leg_out_body_low = body_low(
-                leg_out
+            leg_out_body_low = (
+                body_low(
+                    leg_out
+                )
             )
 
             body_engulfs_base = (
                 leg_out_body_low <=
-                base_low and
+                base_low
+                and
                 leg_out_body_high >=
                 base_high
             )
 
-            if body_engulfs_base and not genuine_gap:
+            if (
+                body_engulfs_base
+                and
+                not genuine_gap
+            ):
+
                 continue
 
             # =================================================
             # PATTERN
             # =================================================
 
+            leg_in_range = candle_range(
+                leg_in
+            )
+
+            if leg_in_range <= 0:
+
+                continue
+
             leg_in_bull_clv = (
                 (
-                    float(leg_in["close"]) -
-                    float(leg_in["low"])
-                ) /
-                candle_range(leg_in)
+                    float(
+                        leg_in["close"]
+                    )
+                    -
+                    float(
+                        leg_in["low"]
+                    )
+                )
+                /
+                leg_in_range
             )
 
             leg_in_bear_clv = (
                 (
-                    float(leg_in["high"]) -
-                    float(leg_in["close"])
-                ) /
-                candle_range(leg_in)
+                    float(
+                        leg_in["high"]
+                    )
+                    -
+                    float(
+                        leg_in["close"]
+                    )
+                )
+                /
+                leg_in_range
             )
 
             is_rbr = (
-                leg_in_bull and
+                leg_in_bull
+                and
                 leg_in_bull_clv >= float(
                     min_clv_pct
-                ) and
+                )
+                and
                 leg_out_bull
             )
 
             is_dbr = (
-                leg_in_bear and
+                leg_in_bear
+                and
                 leg_in_bear_clv >= float(
                     min_clv_pct
-                ) and
+                )
+                and
                 leg_out_bull
             )
 
             is_dbd = (
-                leg_in_bear and
+                leg_in_bear
+                and
                 leg_in_bear_clv >= float(
                     min_clv_pct
-                ) and
+                )
+                and
                 leg_out_bear
             )
 
             is_rbd = (
-                leg_in_bull and
+                leg_in_bull
+                and
                 leg_in_bull_clv >= float(
                     min_clv_pct
-                ) and
+                )
+                and
                 leg_out_bear
             )
 
             if is_rbr:
+
                 pattern = "RBR"
 
             elif is_dbr:
+
                 pattern = "DBR"
 
             elif is_dbd:
+
                 pattern = "DBD"
 
             elif is_rbd:
+
                 pattern = "RBD"
 
             else:
+
                 continue
+
+            # =================================================
+            # ZONE TYPE
+            # =================================================
 
             zone_type = (
                 "Demand"
                 if leg_out_bull
-                else "Supply"
+                else
+                "Supply"
             )
 
             category = (
                 "Continuation"
-                if pattern in ["RBR", "DBD"]
-                else "Reversal"
+                if pattern in [
+                    "RBR",
+                    "DBD"
+                ]
+                else
+                "Reversal"
             )
 
             # =================================================
@@ -1421,18 +1761,25 @@ def scan_dataframe(
             score = 0
 
             if b_count == 1:
+
                 score += 15
 
             if leg_in_tr >= (
-                float(hq_leg_in_atr_mult) *
+                float(
+                    hq_leg_in_atr_mult
+                ) *
                 leg_in_atr
             ):
+
                 score += 10
 
             if leg_out_tr >= (
-                float(hq_leg_out_mult) *
+                float(
+                    hq_leg_out_mult
+                ) *
                 leg_in_tr
             ):
+
                 score += 15
 
             if (
@@ -1442,24 +1789,42 @@ def scan_dataframe(
                 leg_out_tr >=
                 2.0 * leg_in_tr
             ):
+
                 score += 15
 
             volume_sma = float(
                 leg_out["VOL_SMA"]
             )
 
-            if np.isfinite(
-                volume_sma
-            ) and volume_sma > 0:
+            if (
+                np.isfinite(
+                    volume_sma
+                )
+                and
+                volume_sma > 0
+            ):
 
-                if leg_out_volume > volume_sma:
+                if (
+                    leg_out_volume >
+                    volume_sma
+                ):
+
                     score += 10
+
+            # ------------------------------------------------
+            # Strong close
+            # ------------------------------------------------
 
             if leg_out_bull:
 
                 body_position = (
-                    float(leg_out["close"]) -
-                    float(leg_out["low"])
+                    float(
+                        leg_out["close"]
+                    )
+                    -
+                    float(
+                        leg_out["low"]
+                    )
                 ) / candle_range(
                     leg_out
                 )
@@ -1478,6 +1843,7 @@ def scan_dataframe(
                             leg_out_body_heavy_pct
                         )
                     ):
+
                         score += 15
 
                 elif body_position >= 0.80:
@@ -1487,63 +1853,98 @@ def scan_dataframe(
             else:
 
                 body_position = (
-                    float(leg_out["high"]) -
-                    float(leg_out["close"])
+                    float(
+                        leg_out["high"]
+                    )
+                    -
+                    float(
+                        leg_out["close"]
+                    )
                 ) / candle_range(
                     leg_out
                 )
 
                 if body_position >= 0.80:
+
                     score += 15
 
+            # ------------------------------------------------
             # Opposite-color base
+            # ------------------------------------------------
+
             opposite_base = False
 
             for _, base_candle in base.iterrows():
 
                 if (
-                    leg_out_bull and
-                    is_bear(base_candle)
+                    leg_out_bull
+                    and
+                    is_bear(
+                        base_candle
+                    )
                 ):
+
                     opposite_base = True
+
                     break
 
                 if (
-                    leg_out_bear and
-                    is_bull(base_candle)
+                    leg_out_bear
+                    and
+                    is_bull(
+                        base_candle
+                    )
                 ):
+
                     opposite_base = True
+
                     break
 
             if opposite_base:
+
                 score += 10
 
-            # Base quality bonus from Pine
+            # Base quality
             score += 10
 
+            # Genuine gap
             if genuine_gap:
+
                 score += 10
 
-                # Overnight gap approximation
                 if i > 0:
 
-                    previous_time = x.index[
-                        i - 1
-                    ]
+                    try:
 
-                    current_time = x.index[i]
+                        previous_time = (
+                            x.index[i - 1]
+                        )
 
-                    gap_hours = (
-                        current_time -
-                        previous_time
-                    ).total_seconds() / 3600.0
+                        current_time = (
+                            x.index[i]
+                        )
 
-                    if gap_hours > 20:
-                        score += 15
+                        gap_hours = (
+                            current_time -
+                            previous_time
+                        ).total_seconds() / 3600.0
+
+                        if gap_hours > 20:
+
+                            score += 15
+
+                    except Exception:
+
+                        pass
+
+            # ------------------------------------------------
+            # Minimum score
+            # ------------------------------------------------
 
             if score < int(
                 min_valid_score
             ):
+
                 continue
 
             is_hq = (
@@ -1559,19 +1960,26 @@ def scan_dataframe(
             if zone_type == "Demand":
 
                 proximal = base_high
+
                 distal = base_low
 
                 sl = (
                     distal -
-                    float(sl_buffer_atr) *
+                    float(
+                        sl_buffer_atr
+                    ) *
                     leg_out_atr
                 )
 
                 entry = proximal
 
-                risk = entry - sl
+                risk = (
+                    entry -
+                    sl
+                )
 
                 if risk <= 0:
+
                     continue
 
                 tp = (
@@ -1580,32 +1988,49 @@ def scan_dataframe(
                     risk
                 )
 
-                # Pine's tested leg-out level
                 test_level = (
-                    float(leg_out["high"]) -
-                    float(tested_retrace_pct) *
+                    float(
+                        leg_out["high"]
+                    )
+                    -
+                    float(
+                        tested_retrace_pct
+                    )
+                    *
                     (
-                        float(leg_out["high"]) -
-                        float(leg_out["low"])
+                        float(
+                            leg_out["high"]
+                        )
+                        -
+                        float(
+                            leg_out["low"]
+                        )
                     )
                 )
 
             else:
 
                 proximal = base_low
+
                 distal = base_high
 
                 sl = (
                     distal +
-                    float(sl_buffer_atr) *
+                    float(
+                        sl_buffer_atr
+                    ) *
                     leg_out_atr
                 )
 
                 entry = proximal
 
-                risk = sl - entry
+                risk = (
+                    sl -
+                    entry
+                )
 
                 if risk <= 0:
+
                     continue
 
                 tp = (
@@ -1615,11 +2040,22 @@ def scan_dataframe(
                 )
 
                 test_level = (
-                    float(leg_out["low"]) +
-                    float(tested_retrace_pct) *
+                    float(
+                        leg_out["low"]
+                    )
+                    +
+                    float(
+                        tested_retrace_pct
+                    )
+                    *
                     (
-                        float(leg_out["high"]) -
-                        float(leg_out["low"])
+                        float(
+                            leg_out["high"]
+                        )
+                        -
+                        float(
+                            leg_out["low"]
+                        )
                     )
                 )
 
@@ -1676,6 +2112,7 @@ def scan_dataframe(
             ]
 
             touch_count = 0
+
             state = "Fresh"
 
             for _, future_candle in future.iterrows():
@@ -1693,6 +2130,7 @@ def scan_dataframe(
                     if future_low <= distal:
 
                         state = "Broken"
+
                         break
 
                     if future_low <= test_level:
@@ -1704,6 +2142,7 @@ def scan_dataframe(
                     if future_high >= distal:
 
                         state = "Broken"
+
                         break
 
                     if future_high >= test_level:
@@ -1737,14 +2176,15 @@ def scan_dataframe(
                     current_price <=
                     proximal
                 ):
+
                     entry_status = "IN ZONE"
 
-                elif (
-                    current_price < proximal
-                ):
+                elif current_price < proximal:
+
                     entry_status = "NEAR"
 
                 else:
+
                     entry_status = "ABOVE"
 
             else:
@@ -1754,14 +2194,15 @@ def scan_dataframe(
                     current_price <=
                     distal
                 ):
+
                     entry_status = "IN ZONE"
 
-                elif (
-                    current_price > proximal
-                ):
+                elif current_price > proximal:
+
                     entry_status = "NEAR"
 
                 else:
+
                     entry_status = "BELOW"
 
             # =================================================
@@ -1775,7 +2216,8 @@ def scan_dataframe(
             )
 
             risk_per_share = abs(
-                entry - sl
+                entry -
+                sl
             )
 
             if risk_per_share > 0:
@@ -1789,47 +2231,115 @@ def scan_dataframe(
 
                 quantity = 0
 
+            # =================================================
+            # CREATE ZONE RECORD
+            # =================================================
+
             zones.append({
-                "Symbol": symbol,
-                "Timeframe": timeframe,
+
+                "Symbol": str(symbol),
+
+                "Timeframe": str(
+                    timeframe
+                ),
+
                 "Created": x.index[i],
-                "Pattern": pattern,
-                "Category": category,
-                "Type": zone_type,
+
+                "Pattern": str(
+                    pattern
+                ),
+
+                "Category": str(
+                    category
+                ),
+
+                "Type": str(
+                    zone_type
+                ),
+
                 "Direction": (
                     "Bullish"
-                    if zone_type == "Demand"
-                    else "Bearish"
+                    if zone_type ==
+                    "Demand"
+                    else
+                    "Bearish"
                 ),
-                "Score": int(score),
+
+                "Score": int(
+                    score
+                ),
+
                 "HQ": (
                     "HQ"
                     if is_hq
-                    else "Standard"
+                    else
+                    "Standard"
                 ),
-                "State": state,
-                "Touches": int(touch_count),
-                "Current": current_price,
-                "Proximal": proximal,
-                "Distal": distal,
-                "Entry": entry,
-                "SL": sl,
-                "TP": tp,
-                "Risk": risk_per_share,
-                "Qty": quantity,
-                "Distance": distance,
-                "DistancePct": distance_pct,
-                "EntryStatus": entry_status,
-                "Gap": genuine_gap
+
+                "State": str(
+                    state
+                ),
+
+                "Touches": int(
+                    touch_count
+                ),
+
+                "Current": float(
+                    current_price
+                ),
+
+                "Proximal": float(
+                    proximal
+                ),
+
+                "Distal": float(
+                    distal
+                ),
+
+                "Entry": float(
+                    entry
+                ),
+
+                "SL": float(
+                    sl
+                ),
+
+                "TP": float(
+                    tp
+                ),
+
+                "Risk": float(
+                    risk_per_share
+                ),
+
+                "Qty": int(
+                    quantity
+                ),
+
+                "Distance": float(
+                    distance
+                ),
+
+                "DistancePct": float(
+                    distance_pct
+                ),
+
+                "EntryStatus": str(
+                    entry_status
+                ),
+
+                "Gap": bool(
+                    genuine_gap
+                )
             })
 
             zone_found = True
 
-            # Same as Pine:
-            # only strongest base for this leg-out
+            # Strongest base for this leg-out
             break
 
         if zone_found:
+
             continue
 
     return zones
@@ -1842,27 +2352,143 @@ def scan_dataframe(
 def deduplicate_zones(zones):
 
     if not zones:
+
         return []
 
-    df = pd.DataFrame(zones)
+    df = pd.DataFrame(
+        zones
+    )
 
     if df.empty:
+
         return []
 
+    # ========================================================
+    # SAFE TEXT TYPES
+    # ========================================================
+
+    text_columns = [
+        "Symbol",
+        "Timeframe",
+        "Type",
+        "Pattern",
+        "Category",
+        "Direction",
+        "HQ",
+        "State",
+        "EntryStatus"
+    ]
+
+    for column in text_columns:
+
+        if column in df.columns:
+
+            df[column] = (
+                df[column]
+                .astype("string")
+                .fillna("")
+            )
+
+    # ========================================================
+    # SAFE SCORE
+    # ========================================================
+
+    if "Score" in df.columns:
+
+        df["Score"] = pd.to_numeric(
+            df["Score"],
+            errors="coerce"
+        ).fillna(0)
+
+    # ========================================================
+    # SAFE CREATED DATETIME
+    #
+    # IMPORTANT:
+    # सभी timestamps UTC में normalize होंगे।
+    # इससे Pandas 3.x Categorical error नहीं आएगा।
+    # ========================================================
+
+    if "Created" in df.columns:
+
+        df["Created"] = pd.to_datetime(
+            df["Created"],
+            errors="coerce",
+            utc=True
+        )
+
+        df["Created_Sort"] = (
+            df["Created"].fillna(
+                pd.Timestamp(
+                    "1970-01-01",
+                    tz="UTC"
+                )
+            )
+        )
+
+    else:
+
+        df["Created_Sort"] = pd.Timestamp(
+            "1970-01-01",
+            tz="UTC"
+        )
+
+    # ========================================================
+    # SAFE NUMERIC COLUMNS
+    # ========================================================
+
+    numeric_columns = [
+        "Proximal",
+        "Distal",
+        "Entry",
+        "SL",
+        "TP",
+        "Risk",
+        "Current",
+        "Distance",
+        "DistancePct",
+        "Touches"
+    ]
+
+    for column in numeric_columns:
+
+        if column in df.columns:
+
+            df[column] = pd.to_numeric(
+                df[column],
+                errors="coerce"
+            )
+
+    # ========================================================
+    # SAFE SORT
+    #
+    # Original problematic code:
+    #
+    # df.sort_values(...)
+    #
+    # is replaced by normalized columns.
+    # ========================================================
+
     df = df.sort_values(
-        [
+        by=[
             "Symbol",
             "Timeframe",
             "Score",
-            "Created"
+            "Created_Sort"
         ],
         ascending=[
             True,
             True,
             False,
             False
-        ]
+        ],
+        kind="mergesort"
+    ).reset_index(
+        drop=True
     )
+
+    # ========================================================
+    # OVERLAPPING ZONE DEDUPLICATION
+    # ========================================================
 
     keep = []
 
@@ -1883,49 +2509,105 @@ def deduplicate_zones(zones):
                 old["Type"]
             ):
 
-                top1 = max(
-                    row["Proximal"],
-                    row["Distal"]
-                )
+                try:
 
-                bottom1 = min(
-                    row["Proximal"],
-                    row["Distal"]
-                )
+                    top1 = max(
+                        float(
+                            row["Proximal"]
+                        ),
+                        float(
+                            row["Distal"]
+                        )
+                    )
 
-                top2 = max(
-                    old["Proximal"],
-                    old["Distal"]
-                )
+                    bottom1 = min(
+                        float(
+                            row["Proximal"]
+                        ),
+                        float(
+                            row["Distal"]
+                        )
+                    )
 
-                bottom2 = min(
-                    old["Proximal"],
-                    old["Distal"]
-                )
+                    top2 = max(
+                        float(
+                            old["Proximal"]
+                        ),
+                        float(
+                            old["Distal"]
+                        )
+                    )
+
+                    bottom2 = min(
+                        float(
+                            old["Proximal"]
+                        ),
+                        float(
+                            old["Distal"]
+                        )
+                    )
+
+                except (
+                    TypeError,
+                    ValueError
+                ):
+
+                    continue
 
                 overlap = (
-                    min(top1, top2) >=
-                    max(bottom1, bottom2)
+                    min(
+                        top1,
+                        top2
+                    )
+                    >=
+                    max(
+                        bottom1,
+                        bottom2
+                    )
                 )
 
                 if overlap:
 
                     duplicate = True
+
                     break
 
         if not duplicate:
-            keep.append(row)
 
-    return keep
+            keep.append(
+                row
+            )
+
+    # ========================================================
+    # CONVERT BACK TO DICTIONARY
+    # ========================================================
+
+    final_zones = []
+
+    for row in keep:
+
+        row_dict = row.to_dict()
+
+        row_dict.pop(
+            "Created_Sort",
+            None
+        )
+
+        final_zones.append(
+            row_dict
+        )
+
+    return final_zones
 
 
 # ============================================================
-# FORMAT
+# FORMAT RESULT
 # ============================================================
 
 def format_result(df):
 
     if df.empty:
+
         return df
 
     out = df.copy()
@@ -1963,12 +2645,9 @@ def scan_universe(
     progress_callback=None
 ):
 
-    # --------------------------------------------------------
-    # Download only four data sets:
-    # 15M / 1H / Daily / Weekly
-    #
-    # 2H and 3H are generated from 1H.
-    # --------------------------------------------------------
+    # ========================================================
+    # 15M
+    # ========================================================
 
     data_15m = download_batch(
         symbols,
@@ -1977,10 +2656,15 @@ def scan_universe(
     )
 
     if progress_callback:
+
         progress_callback(
             0.20,
             "15M data downloaded"
         )
+
+    # ========================================================
+    # 1H
+    # ========================================================
 
     data_1h = download_batch(
         symbols,
@@ -1989,10 +2673,15 @@ def scan_universe(
     )
 
     if progress_callback:
+
         progress_callback(
             0.40,
             "1H data downloaded"
         )
+
+    # ========================================================
+    # DAILY
+    # ========================================================
 
     data_daily = download_batch(
         symbols,
@@ -2001,10 +2690,15 @@ def scan_universe(
     )
 
     if progress_callback:
+
         progress_callback(
             0.60,
             "Daily data downloaded"
         )
+
+    # ========================================================
+    # WEEKLY
+    # ========================================================
 
     data_weekly = download_batch(
         symbols,
@@ -2013,10 +2707,15 @@ def scan_universe(
     )
 
     if progress_callback:
+
         progress_callback(
             0.70,
             "Weekly data downloaded"
         )
+
+    # ========================================================
+    # SCAN
+    # ========================================================
 
     all_results = []
 
@@ -2027,23 +2726,30 @@ def scan_universe(
         start=1
     ):
 
-        timeframe_data = prepare_symbol_data(
-            symbol,
-            data_15m,
-            data_1h,
-            data_daily,
-            data_weekly
+        timeframe_data = (
+            prepare_symbol_data(
+                symbol,
+                data_15m,
+                data_1h,
+                data_daily,
+                data_weekly
+            )
         )
 
         symbol_zones = []
 
         for timeframe in TIMEFRAMES:
 
-            if timeframe not in timeframe_data:
+            if timeframe not in (
+                timeframe_data
+            ):
+
                 continue
 
             zones = scan_dataframe(
-                timeframe_data[timeframe],
+                timeframe_data[
+                    timeframe
+                ],
                 symbol,
                 timeframe
             )
@@ -2052,22 +2758,37 @@ def scan_universe(
                 zones
             )
 
-        symbol_zones = deduplicate_zones(
-            symbol_zones
+        # ====================================================
+        # DEDUPLICATION
+        # ====================================================
+
+        symbol_zones = (
+            deduplicate_zones(
+                symbol_zones
+            )
         )
 
         all_results.extend(
             symbol_zones
         )
 
+        # ====================================================
+        # PROGRESS
+        # ====================================================
+
         if progress_callback:
 
             progress = (
-                0.70 +
+                0.70
+                +
                 (
                     count /
-                    max(total, 1)
-                ) *
+                    max(
+                        total,
+                        1
+                    )
+                )
+                *
                 0.30
             )
 
@@ -2086,7 +2807,9 @@ def scan_universe(
 
 st.sidebar.divider()
 
-st.sidebar.header("🔎 Scan Mode")
+st.sidebar.header(
+    "🔎 Scan Mode"
+)
 
 scan_mode = st.sidebar.radio(
     "Mode",
@@ -2098,7 +2821,7 @@ scan_mode = st.sidebar.radio(
 
 
 # ============================================================
-# NIFTY SCAN
+# NIFTY UNIVERSE SCAN
 # ============================================================
 
 if scan_mode == "NIFTY Universe":
@@ -2118,9 +2841,11 @@ if scan_mode == "NIFTY Universe":
         step=10
     )
 
-    selected_symbols = NIFTY200[
-        :int(scan_count)
-    ]
+    selected_symbols = (
+        NIFTY200[
+            :int(scan_count)
+        ]
+    )
 
     scan_button = st.sidebar.button(
         "🚀 Run Zone Scan",
@@ -2163,7 +2888,9 @@ if scan_mode == "NIFTY Universe":
                 update_progress
             )
 
-        progress_bar.progress(1.0)
+        progress_bar.progress(
+            1.0
+        )
 
         status_box.success(
             "Zone scan completed."
@@ -2175,52 +2902,100 @@ if scan_mode == "NIFTY Universe":
                 results
             )
 
-            # Only active zones
-            result_df = result_df[
-                result_df["State"].isin(
-                    [
-                        "Fresh",
-                        "Tested"
-                    ]
-                )
-            ].copy()
+            # ------------------------------------------------
+            # Active zones only
+            # ------------------------------------------------
 
-            # HQ first
+            if "State" in result_df.columns:
+
+                result_df = result_df[
+                    result_df["State"].isin(
+                        [
+                            "Fresh",
+                            "Tested"
+                        ]
+                    )
+                ].copy()
+
+            # ------------------------------------------------
+            # HQ rank
+            # ------------------------------------------------
+
             result_df["HQRank"] = (
                 result_df["HQ"]
                 .eq("HQ")
                 .astype(int)
             )
 
-            # Timeframe priority
+            # ------------------------------------------------
+            # Timeframe rank
+            # ------------------------------------------------
+
             timeframe_rank = {
+
                 "Weekly": 6,
+
                 "Daily": 5,
+
                 "3H": 4,
+
                 "2H": 3,
+
                 "1H": 2,
+
                 "15M": 1
             }
 
             result_df["TF_Rank"] = (
-                result_df["Timeframe"]
-                .map(timeframe_rank)
+                result_df[
+                    "Timeframe"
+                ]
+                .map(
+                    timeframe_rank
+                )
                 .fillna(0)
             )
 
-            result_df = result_df.sort_values(
-                [
-                    "HQRank",
-                    "Score",
-                    "TF_Rank",
-                    "DistancePct"
-                ],
-                ascending=[
-                    False,
-                    False,
-                    False,
-                    True
-                ]
+            # ------------------------------------------------
+            # FINAL SAFE SORT
+            # ------------------------------------------------
+
+            result_df["Score"] = (
+                pd.to_numeric(
+                    result_df[
+                        "Score"
+                    ],
+                    errors="coerce"
+                ).fillna(0)
+            )
+
+            result_df["DistancePct"] = (
+                pd.to_numeric(
+                    result_df[
+                        "DistancePct"
+                    ],
+                    errors="coerce"
+                ).fillna(
+                    999999
+                )
+            )
+
+            result_df = (
+                result_df.sort_values(
+                    [
+                        "HQRank",
+                        "Score",
+                        "TF_Rank",
+                        "DistancePct"
+                    ],
+                    ascending=[
+                        False,
+                        False,
+                        False,
+                        True
+                    ],
+                    kind="mergesort"
+                )
             )
 
             st.session_state[
@@ -2240,10 +3015,14 @@ if scan_mode == "NIFTY Universe":
 
 else:
 
-    single_symbol = st.sidebar.text_input(
-        "NSE Symbol",
-        value="RELIANCE"
-    ).upper().strip()
+    single_symbol = (
+        st.sidebar.text_input(
+            "NSE Symbol",
+            value="RELIANCE"
+        )
+        .upper()
+        .strip()
+    )
 
     single_button = st.sidebar.button(
         "🚀 Scan Stock",
@@ -2294,7 +3073,9 @@ else:
                     single_progress
                 )
 
-            progress_bar.progress(1.0)
+            progress_bar.progress(
+                1.0
+            )
 
             status_box.success(
                 "Stock scan completed."
@@ -2307,7 +3088,9 @@ else:
             if not result_df.empty:
 
                 result_df = result_df[
-                    result_df["State"].isin(
+                    result_df[
+                        "State"
+                    ].isin(
                         [
                             "Fresh",
                             "Tested"
@@ -2321,17 +3104,40 @@ else:
                     .astype(int)
                 )
 
-                result_df = result_df.sort_values(
-                    [
-                        "HQRank",
-                        "Score",
-                        "DistancePct"
-                    ],
-                    ascending=[
-                        False,
-                        False,
-                        True
-                    ]
+                result_df["Score"] = (
+                    pd.to_numeric(
+                        result_df[
+                            "Score"
+                        ],
+                        errors="coerce"
+                    ).fillna(0)
+                )
+
+                result_df["DistancePct"] = (
+                    pd.to_numeric(
+                        result_df[
+                            "DistancePct"
+                        ],
+                        errors="coerce"
+                    ).fillna(
+                        999999
+                    )
+                )
+
+                result_df = (
+                    result_df.sort_values(
+                        [
+                            "HQRank",
+                            "Score",
+                            "DistancePct"
+                        ],
+                        ascending=[
+                            False,
+                            False,
+                            True
+                        ],
+                        kind="mergesort"
+                    )
                 )
 
             st.session_state[
@@ -2344,9 +3150,11 @@ else:
 # ============================================================
 
 if (
-    scan_mode == "NIFTY Universe"
+    scan_mode ==
+    "NIFTY Universe"
     and
-    "brg_results" in st.session_state
+    "brg_results" in
+    st.session_state
 ):
 
     result = st.session_state[
@@ -2365,7 +3173,9 @@ if (
         # METRICS
         # ====================================================
 
-        total_zones = len(result)
+        total_zones = len(
+            result
+        )
 
         hq_count = int(
             (
@@ -2390,12 +3200,16 @@ if (
 
         in_zone_count = int(
             (
-                result["EntryStatus"] ==
+                result[
+                    "EntryStatus"
+                ] ==
                 "IN ZONE"
             ).sum()
         )
 
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5 = (
+            st.columns(5)
+        )
 
         c1.metric(
             "Active Zones",
@@ -2431,27 +3245,45 @@ if (
         )
 
         candidate_columns = [
+
             "Symbol",
+
             "Timeframe",
+
             "Category",
+
             "Pattern",
+
             "Type",
+
             "Direction",
+
             "HQ",
+
             "Score",
+
             "State",
+
             "Current",
+
             "Entry",
+
             "SL",
+
             "TP",
+
             "Qty",
+
             "DistancePct",
+
             "EntryStatus"
         ]
 
-        candidate = result[
-            candidate_columns
-        ].copy()
+        candidate = (
+            result[
+                candidate_columns
+            ].copy()
+        )
 
         candidate = format_result(
             candidate
@@ -2471,7 +3303,9 @@ if (
             "🔍 Zone Filters"
         )
 
-        f1, f2, f3, f4 = st.columns(4)
+        f1, f2, f3, f4 = (
+            st.columns(4)
+        )
 
         with f1:
 
@@ -2515,59 +3349,91 @@ if (
                 "Minimum Score",
                 0,
                 150,
-                int(min_valid_score),
+                int(
+                    min_valid_score
+                ),
                 step=5
             )
 
         filtered = result[
-            result["Timeframe"].isin(
+            result[
+                "Timeframe"
+            ].isin(
                 selected_tf
             )
             &
-            result["Type"].isin(
+            result[
+                "Type"
+            ].isin(
                 selected_type
             )
             &
-            result["State"].isin(
+            result[
+                "State"
+            ].isin(
                 selected_state
             )
             &
             (
-                result["Score"] >=
+                result[
+                    "Score"
+                ] >=
                 score_filter
             )
         ].copy()
 
         st.write(
-            f"**Filtered Zones: {len(filtered)}**"
+            f"**Filtered Zones: "
+            f"{len(filtered)}**"
         )
 
         filtered_columns = [
+
             "Symbol",
+
             "Timeframe",
+
             "Category",
+
             "Pattern",
+
             "Type",
+
             "Direction",
+
             "HQ",
+
             "Score",
+
             "State",
+
             "Touches",
+
             "Current",
+
             "Proximal",
+
             "Distal",
+
             "Entry",
+
             "SL",
+
             "TP",
+
             "Qty",
+
             "DistancePct",
+
             "EntryStatus"
         ]
 
-        filtered_display = format_result(
-            filtered[
-                filtered_columns
-            ].copy()
+        filtered_display = (
+            format_result(
+                filtered[
+                    filtered_columns
+                ].copy()
+            )
         )
 
         st.dataframe(
@@ -2597,9 +3463,11 @@ if (
 # ============================================================
 
 if (
-    scan_mode == "Single Stock"
+    scan_mode ==
+    "Single Stock"
     and
-    "single_results" in st.session_state
+    "single_results" in
+    st.session_state
 ):
 
     result = st.session_state[
@@ -2619,23 +3487,41 @@ if (
         )
 
         display_columns = [
+
             "Timeframe",
+
             "Category",
+
             "Pattern",
+
             "Type",
+
             "Direction",
+
             "HQ",
+
             "Score",
+
             "State",
+
             "Touches",
+
             "Current",
+
             "Proximal",
+
             "Distal",
+
             "Entry",
+
             "SL",
+
             "TP",
+
             "Qty",
+
             "DistancePct",
+
             "EntryStatus"
         ]
 
@@ -2653,12 +3539,16 @@ if (
 
         st.download_button(
             "⬇️ Download Stock Zones",
+
             result.to_csv(
                 index=False
             ).encode("utf-8"),
+
             file_name=(
-                f"{single_symbol}_BrG_Zones.csv"
+                f"{single_symbol}"
+                "_BrG_Zones.csv"
             ),
+
             mime="text/csv"
         )
 
@@ -2715,7 +3605,8 @@ Pine Script के आधार पर:
 st.divider()
 
 st.caption(
-    "BrG Trading Zone V1.0 | "
-    "Based on supplied Pine Zone logic | "
-    "Yahoo Finance | Educational / Research use"
+    "BrG Trading Zone V1.1 | "
+    "Pandas 3.x Safe | "
+    "Yahoo Finance | "
+    "Educational / Research use"
 )
